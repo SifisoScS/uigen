@@ -7,14 +7,89 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getLanguageModel } from "@/lib/provider";
 import { generationPrompt } from "@/lib/prompts/generation";
+import { checkRateLimit } from "@/lib/rate-limiter";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: Request) {
-  const {
-    messages,
-    files,
-    projectId,
-  }: { messages: any[]; files: Record<string, FileNode>; projectId?: string } =
-    await req.json();
+interface ChatRequest {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  messages: any[];
+  files: Record<string, FileNode>;
+  projectId?: string;
+}
+
+function parseBody(body: unknown): ChatRequest | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as Record<string, unknown>;
+  if (!Array.isArray(b.messages)) return null;
+  if (!b.files || typeof b.files !== "object" || Array.isArray(b.files))
+    return null;
+  const validMessages = b.messages.every(
+    (m) =>
+      m &&
+      typeof m === "object" &&
+      "role" in m &&
+      typeof (m as Record<string, unknown>).role === "string" &&
+      "content" in m
+  );
+  if (!validMessages) return null;
+  return {
+    messages: b.messages,
+    files: b.files as Record<string, FileNode>,
+    projectId: typeof b.projectId === "string" ? b.projectId : undefined,
+  };
+}
+
+export async function POST(req: NextRequest) {
+  // Rate limiting: authenticated users by userId, anonymous by IP
+  const session = await getSession();
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+    req.headers.get("x-real-ip") ??
+    "anonymous";
+  const rateLimitKey = session ? `user:${session.userId}` : `ip:${ip}`;
+  const rateLimit = checkRateLimit(rateLimitKey);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait before sending another message." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(
+            Math.ceil((rateLimit.retryAfterMs ?? 60_000) / 1000)
+          ),
+        },
+      }
+    );
+  }
+
+  // Input validation
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const body = parseBody(rawBody);
+  if (!body) {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const { messages, files, projectId } = body;
+
+  // Ownership check: if projectId is provided the user must own it
+  if (projectId) {
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const project = await prisma.project.findUnique({
+      where: { id: projectId, userId: session.userId },
+      select: { id: true },
+    });
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+  }
 
   messages.unshift({
     role: "system",
@@ -29,52 +104,46 @@ export async function POST(req: Request) {
   fileSystem.deserializeFromNodes(files);
 
   const model = getLanguageModel();
-  // Use fewer steps for mock provider to prevent repetition
   const isMockProvider = !process.env.ANTHROPIC_API_KEY;
   const result = streamText({
     model,
     messages,
     maxTokens: 10_000,
     maxSteps: isMockProvider ? 4 : 40,
-    onError: (err: any) => {
-      console.error(err);
+    onError: ({ error }) => {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[chat/stream] error:", error);
+      }
     },
     tools: {
       str_replace_editor: buildStrReplaceTool(fileSystem),
       file_manager: buildFileManagerTool(fileSystem),
     },
     onFinish: async ({ response }) => {
-      // Save to project if projectId is provided and user is authenticated
-      if (projectId) {
-        try {
-          // Check if user is authenticated
-          const session = await getSession();
-          if (!session) {
-            console.error("User not authenticated, cannot save project");
-            return;
-          }
+      if (!projectId || !session) return;
 
-          // Get the messages from the response
-          const responseMessages = response.messages || [];
-          // Combine original messages with response messages
-          const allMessages = appendResponseMessages({
-            messages: [...messages.filter((m) => m.role !== "system")],
-            responseMessages,
-          });
+      const responseMessages = response.messages ?? [];
+      const allMessages = appendResponseMessages({
+        messages: [...messages.filter((m) => m.role !== "system")],
+        responseMessages,
+      });
 
-          await prisma.project.update({
-            where: {
-              id: projectId,
-              userId: session.userId,
-            },
-            data: {
-              messages: JSON.stringify(allMessages),
-              data: JSON.stringify(fileSystem.serialize()),
-            },
-          });
-        } catch (error) {
-          console.error("Failed to save project data:", error);
-        }
+      try {
+        await prisma.project.update({
+          where: { id: projectId, userId: session.userId },
+          data: {
+            messages: JSON.stringify(allMessages),
+            data: JSON.stringify(fileSystem.serialize()),
+          },
+        });
+      } catch (error) {
+        // Stream has already been sent; log for server-side observability.
+        // The client will not lose work — it holds the streamed state in memory.
+        console.error("[chat/save] failed to persist project:", {
+          projectId,
+          userId: session.userId,
+          error,
+        });
       }
     },
   });
