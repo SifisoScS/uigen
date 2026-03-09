@@ -13,17 +13,23 @@ export function PreviewFrame() {
   const { getAllFiles, refreshTrigger } = useFileSystem();
   const [error, setError] = useState<string | null>(null);
   const [entryPoint, setEntryPoint] = useState<string>("/App.jsx");
-  const [isFirstLoad, setIsFirstLoad] = useState(true);
+  // useRef instead of useState: only read inside the effect, no render needed
+  const isFirstLoadRef = useRef(true);
+  const prevBlobUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const updatePreview = () => {
       try {
         const files = getAllFiles();
 
-        // Clear error first when we have files
-        if (files.size > 0 && error) {
-          setError(null);
+        if (files.size === 0) {
+          setError(isFirstLoadRef.current ? "firstLoad" : "No files to preview");
+          return;
         }
+
+        // We have files — clear first-load flag and any prior error
+        isFirstLoadRef.current = false;
+        setError(null);
 
         // Find the entry point - look for App.jsx, App.tsx, index.jsx, or index.tsx
         let foundEntryPoint = entryPoint;
@@ -41,7 +47,7 @@ export function PreviewFrame() {
           if (found) {
             foundEntryPoint = found;
             setEntryPoint(found);
-          } else if (files.size > 0) {
+          } else {
             // Just use the first .jsx/.tsx file found
             const firstJSX = Array.from(files.keys()).find(
               (path) => path.endsWith(".jsx") || path.endsWith(".tsx")
@@ -53,20 +59,6 @@ export function PreviewFrame() {
           }
         }
 
-        if (files.size === 0) {
-          if (isFirstLoad) {
-            setError("firstLoad");
-          } else {
-            setError("No files to preview");
-          }
-          return;
-        }
-
-        // We have files, so it's no longer the first load
-        if (isFirstLoad) {
-          setIsFirstLoad(false);
-        }
-
         if (!foundEntryPoint || !files.has(foundEntryPoint)) {
           setError(
             "No React component found. Create an App.jsx or index.jsx file to get started."
@@ -74,7 +66,9 @@ export function PreviewFrame() {
           return;
         }
 
-        const { importMap, styles, errors } = createImportMap(files);
+        const { importMap, styles, errors, blobUrls } = createImportMap(files);
+        // Store the new URLs; cleanup will revoke them on the next run or unmount
+        prevBlobUrlsRef.current = blobUrls;
         const previewHTML = createPreviewHTML(foundEntryPoint, importMap, styles, errors);
 
         if (iframeRef.current) {
@@ -86,8 +80,6 @@ export function PreviewFrame() {
             "allow-scripts allow-same-origin allow-forms"
           );
           iframe.srcdoc = previewHTML;
-
-          setError(null);
         }
       } catch (err) {
         console.error("Preview error:", err);
@@ -96,7 +88,14 @@ export function PreviewFrame() {
     };
 
     updatePreview();
-  }, [refreshTrigger, getAllFiles, entryPoint, error, isFirstLoad]);
+
+    return () => {
+      // Revoke blob URLs created during this render — runs before the next
+      // effect execution and on component unmount, covering both cases.
+      prevBlobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      prevBlobUrlsRef.current = [];
+    };
+  }, [refreshTrigger, getAllFiles, entryPoint]);
 
   if (error) {
     if (error === "firstLoad") {

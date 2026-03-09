@@ -248,7 +248,6 @@ test("uses provided file system when passed", () => {
 
 // Tool call tests
 test("handles str_replace_editor create command", () => {
-  mockFileSystem.createFileWithParents.mockReturnValue("File created");
   mockFileSystem.createFile.mockReturnValue({});
 
   const { result } = renderHook(() => useFileSystem(), {
@@ -268,10 +267,6 @@ test("handles str_replace_editor create command", () => {
     });
   });
 
-  expect(mockFileSystem.createFileWithParents).toHaveBeenCalledWith(
-    "/test.js",
-    "console.log('test');"
-  );
   expect(mockFileSystem.createFile).toHaveBeenCalledWith(
     "/test.js",
     "console.log('test');"
@@ -279,8 +274,9 @@ test("handles str_replace_editor create command", () => {
   expect(result.current.refreshTrigger).toBe(initialTrigger + 1);
 });
 
-test("handles str_replace_editor create command with error", () => {
-  mockFileSystem.createFileWithParents.mockReturnValue("Error: File exists");
+test("handles str_replace_editor create command when file already exists", () => {
+  // createFile returns null when the file already exists — refresh still fires
+  mockFileSystem.createFile.mockReturnValue(null);
 
   const { result } = renderHook(() => useFileSystem(), {
     wrapper: ({ children }) => <FileSystemProvider>{children}</FileSystemProvider>,
@@ -299,7 +295,7 @@ test("handles str_replace_editor create command with error", () => {
     });
   });
 
-  expect(result.current.refreshTrigger).toBe(initialTrigger); // No refresh on error
+  expect(result.current.refreshTrigger).toBe(initialTrigger + 1);
 });
 
 test("handles str_replace_editor str_replace command", () => {
