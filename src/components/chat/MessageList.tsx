@@ -74,23 +74,45 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                                 <span className="text-sm text-neutral-700">{part.reasoning}</span>
                               </div>
                             );
-                          case "tool-invocation":
+                          case "tool-invocation": {
                             const tool = part.toolInvocation;
+                            const args = (tool as any).args ?? {};
+                            const isDone = tool.state === "result";
+
+                            // Build a human-readable label from the tool args
+                            let label = tool.toolName;
+                            if (tool.toolName === "str_replace_editor" && args.path) {
+                              const cmd: string = args.command ?? "";
+                              const short = args.path.split("/").pop() ?? args.path;
+                              const cmdLabel: Record<string, string> = {
+                                create: "Creating",
+                                str_replace: "Editing",
+                                insert: "Inserting into",
+                                view: "Viewing",
+                                undo_edit: "Undoing edit in",
+                              };
+                              label = `${cmdLabel[cmd] ?? cmd} ${short}`;
+                            } else if (tool.toolName === "file_manager" && args.path) {
+                              const short = args.path.split("/").pop() ?? args.path;
+                              label = args.command === "rename" ? `Renaming ${short}` : `Deleting ${short}`;
+                            }
+
                             return (
                               <div key={partIndex} className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-neutral-50 rounded-lg text-xs font-mono border border-neutral-200">
-                                {tool.state === "result" && tool.result ? (
+                                {isDone ? (
                                   <>
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                    <span className="text-neutral-700">{tool.toolName}</span>
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                                    <span className="text-neutral-500">{label}</span>
                                   </>
                                 ) : (
                                   <>
-                                    <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-                                    <span className="text-neutral-700">{tool.toolName}</span>
+                                    <Loader2 className="w-3 h-3 animate-spin text-blue-500 flex-shrink-0" />
+                                    <span className="text-neutral-700">{label}</span>
                                   </>
                                 )}
                               </div>
                             );
+                          }
                           case "source":
                             return (
                               <div key={partIndex} className="mt-2 text-xs text-neutral-500">
