@@ -14,6 +14,7 @@ export function PreviewFrame() {
   const [error, setError] = useState<string | null>(null);
   const [entryPoint, setEntryPoint] = useState<string>("/App.jsx");
   const [isFirstLoad, setIsFirstLoad] = useState(true);
+  const prevBlobUrlsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const updatePreview = () => {
@@ -74,7 +75,11 @@ export function PreviewFrame() {
           return;
         }
 
-        const { importMap, styles, errors } = createImportMap(files);
+        // Revoke previous blob URLs to free memory
+        prevBlobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+
+        const { importMap, styles, errors, blobUrls } = createImportMap(files);
+        prevBlobUrlsRef.current = blobUrls;
         const previewHTML = createPreviewHTML(foundEntryPoint, importMap, styles, errors);
 
         if (iframeRef.current) {
@@ -96,7 +101,8 @@ export function PreviewFrame() {
     };
 
     updatePreview();
-  }, [refreshTrigger, getAllFiles, entryPoint, error, isFirstLoad]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger, getAllFiles, entryPoint]);
 
   if (error) {
     if (error === "firstLoad") {

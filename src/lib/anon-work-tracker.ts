@@ -7,8 +7,12 @@ export function setHasAnonWork(messages: any[], fileSystemData: any) {
   
   // Only set if there's actual content
   if (messages.length > 0 || Object.keys(fileSystemData).length > 1) { // > 1 because root "/" always exists
-    sessionStorage.setItem(STORAGE_KEY, "true");
-    sessionStorage.setItem(DATA_KEY, JSON.stringify({ messages, fileSystemData }));
+    try {
+      sessionStorage.setItem(STORAGE_KEY, "true");
+      sessionStorage.setItem(DATA_KEY, JSON.stringify({ messages, fileSystemData }));
+    } catch {
+      // Serialization or quota error — ignore, best-effort persistence
+    }
   }
 }
 

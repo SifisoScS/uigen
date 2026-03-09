@@ -153,10 +153,7 @@ export function FileSystemProvider({
         switch (command) {
           case "create":
             if (path && file_text !== undefined) {
-              const result = fileSystem.createFileWithParents(path, file_text);
-              if (!result.startsWith("Error:")) {
-                createFile(path, file_text);
-              }
+              createFile(path, file_text);
             }
             break;
 
@@ -199,10 +196,7 @@ export function FileSystemProvider({
 
           case "delete":
             if (path) {
-              const success = fileSystem.deleteFile(path);
-              if (success) {
-                deleteFile(path);
-              }
+              deleteFile(path);
             }
             break;
         }

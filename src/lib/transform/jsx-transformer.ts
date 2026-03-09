@@ -87,6 +87,7 @@ export interface ImportMapResult {
   importMap: string;
   styles: string;
   errors: Array<{ path: string; error: string }>;
+  blobUrls: string[];
 }
 
 export function createImportMap(files: Map<string, string>): ImportMapResult {
@@ -105,6 +106,7 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
   const allCssImports = new Set<{ from: string; cssPath: string }>();
   let collectedStyles = "";
   const errors: Array<{ path: string; error: string }> = [];
+  const createdBlobUrls: string[] = [];
 
   // First pass: transform all files and collect imports
   for (const [path, content] of files) {
@@ -129,6 +131,7 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
       
       // Normal successful transform
       const blobUrl = createBlobURL(code);
+      createdBlobUrls.push(blobUrl);
       transformedFiles.set(path, blobUrl);
 
       // Collect all imports
@@ -257,6 +260,7 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
       // Create placeholder module
       const placeholderCode = createPlaceholderModule(componentName);
       const placeholderUrl = createBlobURL(placeholderCode);
+      createdBlobUrls.push(placeholderUrl);
 
       // Add all possible import variations
       imports[importPath] = placeholderUrl;
@@ -270,7 +274,8 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
   return {
     importMap: JSON.stringify({ imports }, null, 2),
     styles: collectedStyles,
-    errors
+    errors,
+    blobUrls: createdBlobUrls,
   };
 }
 

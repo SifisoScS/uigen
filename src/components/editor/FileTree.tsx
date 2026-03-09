@@ -84,7 +84,7 @@ function FileTreeNode({ node, level }: FileTreeNodeProps) {
 }
 
 export function FileTree() {
-  const { fileSystem, refreshTrigger } = useFileSystem();
+  const { fileSystem } = useFileSystem();
   const rootNode = fileSystem.getNode("/");
 
   if (!rootNode || !rootNode.children || rootNode.children.size === 0) {
@@ -106,7 +106,7 @@ export function FileTree() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="py-2" key={refreshTrigger}>
+      <div className="py-2">
         {rootChildren.map((child) => (
           <FileTreeNode key={child.path} node={child} level={0} />
         ))}
