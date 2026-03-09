@@ -325,7 +325,7 @@ export function createPreviewHTML(
       entryPointUrl = importMapObj.imports[entryPoint];
     }
   } catch (e) {
-    console.error("Failed to parse import map:", e);
+    if (process.env.NODE_ENV !== "production") console.error("Failed to parse import map:", e);
   }
 
   return `<!DOCTYPE html>
