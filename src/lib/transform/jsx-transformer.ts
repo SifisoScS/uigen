@@ -92,11 +92,27 @@ export interface ImportMapResult {
 
 export function createImportMap(files: Map<string, string>): ImportMapResult {
   const imports: Record<string, string> = {
+    // React core
     react: "https://esm.sh/react@19",
     "react-dom": "https://esm.sh/react-dom@19",
     "react-dom/client": "https://esm.sh/react-dom@19/client",
     "react/jsx-runtime": "https://esm.sh/react@19/jsx-runtime",
     "react/jsx-dev-runtime": "https://esm.sh/react@19/jsx-dev-runtime",
+    // Icons
+    "lucide-react": "https://esm.sh/lucide-react",
+    // Animation
+    "framer-motion": "https://esm.sh/framer-motion",
+    // Charts
+    recharts: "https://esm.sh/recharts",
+    // State management
+    zustand: "https://esm.sh/zustand",
+    "zustand/middleware": "https://esm.sh/zustand/middleware",
+    // Utilities
+    clsx: "https://esm.sh/clsx",
+    "class-variance-authority": "https://esm.sh/class-variance-authority",
+    "tailwind-merge": "https://esm.sh/tailwind-merge",
+    "date-fns": "https://esm.sh/date-fns",
+    zod: "https://esm.sh/zod",
   };
 
   // Transform each file and create blob URLs
@@ -309,7 +325,7 @@ export function createPreviewHTML(
       entryPointUrl = importMapObj.imports[entryPoint];
     }
   } catch (e) {
-    console.error("Failed to parse import map:", e);
+    if (process.env.NODE_ENV !== "production") console.error("Failed to parse import map:", e);
   }
 
   return `<!DOCTYPE html>

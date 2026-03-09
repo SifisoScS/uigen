@@ -5,7 +5,7 @@ import {
   LanguageModelV1Message,
 } from "@ai-sdk/provider";
 
-const MODEL = "claude-sonnet-4-0";
+const MODEL = "claude-sonnet-4-6";
 
 export class MockLanguageModel implements LanguageModelV1 {
   readonly specificationVersion = "v1" as const;
@@ -510,7 +510,6 @@ export function getLanguageModel() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey || apiKey.trim() === "") {
-    console.log("No ANTHROPIC_API_KEY found, using mock provider");
     return new MockLanguageModel("mock-claude-sonnet-4-0");
   }
 

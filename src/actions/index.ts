@@ -54,7 +54,7 @@ export async function signUp(
     revalidatePath("/");
     return { success: true };
   } catch (error) {
-    console.error("Sign up error:", error);
+    if (process.env.NODE_ENV !== "production") console.error("Sign up error:", error);
     return { success: false, error: "An error occurred during sign up" };
   }
 }
@@ -91,7 +91,7 @@ export async function signIn(
     revalidatePath("/");
     return { success: true };
   } catch (error) {
-    console.error("Sign in error:", error);
+    if (process.env.NODE_ENV !== "production") console.error("Sign in error:", error);
     return { success: false, error: "An error occurred during sign in" };
   }
 }
@@ -121,7 +121,7 @@ export async function getUser() {
 
     return user;
   } catch (error) {
-    console.error("Get user error:", error);
+    if (process.env.NODE_ENV !== "production") console.error("Get user error:", error);
     return null;
   }
 }

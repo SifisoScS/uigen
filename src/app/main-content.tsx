@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -10,10 +11,21 @@ import { FileSystemProvider } from "@/lib/contexts/file-system-context";
 import { ChatProvider } from "@/lib/contexts/chat-context";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { FileTree } from "@/components/editor/FileTree";
-import { CodeEditor } from "@/components/editor/CodeEditor";
 import { PreviewFrame } from "@/components/preview/PreviewFrame";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HeaderActions } from "@/components/HeaderActions";
+
+const CodeEditor = dynamic(
+  () => import("@/components/editor/CodeEditor").then((m) => m.CodeEditor),
+  {
+    loading: () => (
+      <div className="h-full flex items-center justify-center bg-gray-900">
+        <p className="text-sm text-gray-500">Loading editor…</p>
+      </div>
+    ),
+    ssr: false,
+  }
+);
 
 interface MainContentProps {
   user?: {
@@ -23,8 +35,8 @@ interface MainContentProps {
   project?: {
     id: string;
     name: string;
-    messages: any[];
-    data: any;
+    messages: unknown[];
+    data: Record<string, unknown>;
     createdAt: Date;
     updatedAt: Date;
   };
@@ -35,7 +47,7 @@ export function MainContent({ user, project }: MainContentProps) {
 
   return (
     <FileSystemProvider initialData={project?.data}>
-      <ChatProvider projectId={project?.id} initialMessages={project?.messages}>
+      <ChatProvider projectId={project?.id} initialMessages={project?.messages as import("ai").Message[] | undefined}>
         <div className="h-screen w-screen overflow-hidden bg-neutral-50">
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Left Panel - Chat */}

@@ -42,7 +42,7 @@ export const buildStrReplaceTool = (fileSystem: VirtualFileSystem) => {
           return fileSystem.insertInFile(path, insert_line || 0, new_str || "");
 
         case "undo_edit":
-          return `Error: undo_edit command is not supported in this version. Use str_replace to revert changes.`;
+          return fileSystem.undoLastEdit();
       }
     },
   };

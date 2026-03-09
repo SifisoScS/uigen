@@ -6,9 +6,15 @@ export interface FileNode {
   children?: Map<string, FileNode>;
 }
 
+interface UndoEntry {
+  path: string;
+  previousContent: string | null; // null means the file didn't exist (was created)
+}
+
 export class VirtualFileSystem {
   private files: Map<string, FileNode> = new Map();
   private root: FileNode;
+  private undoStack: UndoEntry[] = [];
 
   constructor() {
     this.root = {
@@ -61,6 +67,9 @@ export class VirtualFileSystem {
     if (this.files.has(normalized)) {
       return null;
     }
+
+    // Record undo: file didn't exist before
+    this.undoStack.push({ path: normalized, previousContent: null });
 
     // Create parent directories if they don't exist
     const parts = normalized.split("/").filter(Boolean);
@@ -138,6 +147,8 @@ export class VirtualFileSystem {
       return false;
     }
 
+    // Record undo: snapshot current content before overwriting
+    this.undoStack.push({ path: normalized, previousContent: file.content ?? "" });
     file.content = content;
     return true;
   }
@@ -501,9 +512,35 @@ export class VirtualFileSystem {
     return `Text inserted at line ${insertLine} in ${path}`;
   }
 
+  undoLastEdit(): string {
+    const entry = this.undoStack.pop();
+    if (!entry) {
+      return "Error: Nothing to undo.";
+    }
+
+    const { path, previousContent } = entry;
+
+    if (previousContent === null) {
+      // File was created — delete it to undo
+      this.deleteFile(path);
+      // deleteFile pushes its own undo entry; pop it to avoid polluting the stack
+      this.undoStack.pop();
+      return `Undone: deleted ${path} (creation reversed)`;
+    }
+
+    // File was modified — restore previous content
+    const file = this.files.get(path);
+    if (!file || file.type !== "file") {
+      return `Error: Cannot undo — file no longer exists: ${path}`;
+    }
+    file.content = previousContent;
+    return `Undone: restored ${path} to previous state`;
+  }
+
   reset(): void {
     // Clear all files and reset to initial state
     this.files.clear();
+    this.undoStack = [];
     this.root = {
       type: "directory",
       name: "/",
