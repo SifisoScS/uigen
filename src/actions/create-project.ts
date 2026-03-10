@@ -14,11 +14,9 @@ interface CreateProjectInput {
 }
 
 export async function createProject(input: CreateProjectInput) {
+  // Session is optional — anonymous users can create projects (userId will be null).
+  // Authenticated users have their projects associated with their account.
   const session = await getSession();
-
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
 
   // Merge template files into initial data if a valid templateId was supplied
   let initialData: Record<string, FileNode | unknown> = input.data;
@@ -33,7 +31,7 @@ export async function createProject(input: CreateProjectInput) {
   const project = await prisma.project.create({
     data: {
       name: input.name,
-      userId: session.userId,
+      userId: session?.userId ?? null,
       messages: JSON.stringify(input.messages),
       data: JSON.stringify(initialData),
     },

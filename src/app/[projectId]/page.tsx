@@ -9,17 +9,15 @@ interface PageProps {
 
 export default async function ProjectPage({ params }: PageProps) {
   const { projectId } = await params;
+  // getUser() returns null for anonymous visitors — that's fine.
+  // Anonymous projects (userId === null in DB) are accessible without auth.
   const user = await getUser();
-
-  if (!user) {
-    redirect("/");
-  }
 
   let project;
   try {
     project = await getProject(projectId);
-  } catch (error) {
-    // If project not found or user doesn't have access, redirect to home
+  } catch {
+    // Project not found or requester doesn't own it — send back to home.
     redirect("/");
   }
 

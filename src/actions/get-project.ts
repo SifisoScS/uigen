@@ -5,20 +5,19 @@ import { prisma } from "@/lib/prisma";
 
 export async function getProject(projectId: string) {
   const session = await getSession();
-  
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
 
   const project = await prisma.project.findUnique({
-    where: {
-      id: projectId,
-      userId: session.userId,
-    },
+    where: { id: projectId },
   });
 
   if (!project) {
     throw new Error("Project not found");
+  }
+
+  // If the project belongs to a specific user, verify the requester matches.
+  // Anonymous projects (userId === null) are accessible without authentication.
+  if (project.userId && (!session || project.userId !== session.userId)) {
+    throw new Error("Unauthorized");
   }
 
   let messages: unknown[];
