@@ -14,6 +14,10 @@ import {
   FileText,
   Globe,
   Wand2,
+  User,
+  ShoppingCart,
+  BookOpen,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTemplates } from "@/lib/templates";
@@ -30,6 +34,10 @@ const TEMPLATE_ICONS: Record<string, React.ElementType> = {
   LayoutDashboard,
   Globe,
   FileText,
+  User,
+  ShoppingCart,
+  BookOpen,
+  Settings,
 };
 
 export function ChatInterface() {
@@ -145,7 +153,7 @@ export function ChatInterface() {
             <p className="text-[11px] font-medium text-neutral-600 uppercase tracking-widest text-center mb-3 select-none">
               Or start from a template
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {templates.map((template) => {
                 const Icon = TEMPLATE_ICONS[template.icon] ?? Wand2;
                 return (

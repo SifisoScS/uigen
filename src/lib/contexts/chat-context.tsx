@@ -5,11 +5,13 @@ import {
   useContext,
   ReactNode,
   useEffect,
+  useCallback,
 } from "react";
 import { useChat as useAIChat } from "@ai-sdk/react";
 import { Message } from "ai";
 import { useFileSystem } from "./file-system-context";
 import { setHasAnonWork } from "@/lib/anon-work-tracker";
+import { useValidateFs } from "@/lib/hooks/use-validate-fs";
 
 interface ChatContextProps {
   projectId?: string;
@@ -32,7 +34,7 @@ export function ChatProvider({
   projectId,
   initialMessages = [],
 }: ChatContextProps & { children: ReactNode }) {
-  const { fileSystem, handleToolCall } = useFileSystem();
+  const { fileSystem, handleToolCall, getAllFiles } = useFileSystem();
 
   const {
     messages,
@@ -41,6 +43,7 @@ export function ChatProvider({
     handleInputChange,
     handleSubmit,
     status,
+    append,
   } = useAIChat({
     api: "/api/chat",
     initialMessages,
@@ -51,6 +54,26 @@ export function ChatProvider({
     onToolCall: ({ toolCall }) => {
       handleToolCall(toolCall);
     },
+  });
+
+  // Auto-validation: fires after each generation stream completes.
+  // If issues are detected, appends a follow-up message so Claude can self-correct.
+  const handleValidationIssues = useCallback(
+    (issues: string[]) => {
+      if (issues.length === 0) return;
+      const list = issues.map((i) => `• ${i}`).join("\n");
+      append({
+        role: "user",
+        content: `[Auto-validator] Found ${issues.length} potential issue${issues.length === 1 ? "" : "s"} in the generated files:\n${list}\n\nShall I fix these automatically?`,
+      });
+    },
+    [append]
+  );
+
+  useValidateFs({
+    files: getAllFiles(),
+    status,
+    onIssues: handleValidationIssues,
   });
 
   // Track anonymous work
