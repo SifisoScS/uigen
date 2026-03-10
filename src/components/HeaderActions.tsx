@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { AuthDialog } from "@/components/auth/AuthDialog";
+import { ExportButton } from "@/components/ExportButton";
 import { signOut } from "@/actions";
 import { getProjects } from "@/actions/get-projects";
 import { createProject } from "@/actions/create-project";
@@ -167,7 +168,8 @@ export function HeaderActions({ user, projectId }: HeaderActionsProps) {
   if (!user) {
     return (
       <>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {projectId && <ExportButton />}
           <Button variant="outline" className="h-8" onClick={handleSignInClick}>
             Sign In
           </Button>
@@ -306,6 +308,8 @@ export function HeaderActions({ user, projectId }: HeaderActionsProps) {
           </div>
         )
       )}
+
+      {projectId && <ExportButton projectName={currentName} />}
 
       <Button className="flex items-center gap-2 h-8" onClick={handleNewDesign}>
         <Plus className="h-4 w-4" />
