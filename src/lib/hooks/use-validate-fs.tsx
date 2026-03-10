@@ -4,58 +4,107 @@
  * useValidateFs
  *
  * Runs lightweight static analysis on the virtual FS after each generation
- * stream completes. If potential issues are detected it calls `onIssues` so
- * the caller can surface a follow-up message to the user.
+ * stream completes. Calls `onIssues` with a structured list if problems are found
+ * so the chat context can surface a self-correction prompt to Claude.
  *
- * Analysis checks:
- *  1. JSX element usage without a corresponding import (simple heuristic)
- *  2. Missing /App.tsx or /App.jsx entry point
- *  3. Files that reference @/ aliases pointing to paths that don't exist
+ * Checks performed:
+ *  1. Missing /App.tsx or /App.jsx entry point
+ *  2. JSX elements used without a corresponding import (uppercase heuristic)
+ *  3. Broken @/* alias imports (path not found in virtual FS)
+ *  4. Missing "use client" directive in files that use React hooks
+ *  5. Common Tailwind class typos (via curated regex list)
+ *  6. Registry components imported from wrong paths
+ *
+ * Runs ONLY on status transition: (streaming | submitted) → idle.
+ * Uses a ref-based guard to prevent repeated triggers on the same generation.
  */
 
 import { useEffect, useRef } from "react";
 import { componentRegistry } from "@/lib/registry";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 interface ValidateFsOptions {
-  /** Map of virtualPath → content, from getAllFiles() */
   files: Map<string, string>;
-  /** Current stream status — validation only runs when it transitions to idle */
   status: string;
-  /** Called once per generation with the list of issues (if any) */
   onIssues: (issues: string[]) => void;
 }
+
+// ---------------------------------------------------------------------------
+// Tailwind typo patterns  (pattern → suggested correction)
+// ---------------------------------------------------------------------------
+
+const TAILWIND_TYPOS: Array<[RegExp, string]> = [
+  [/\bbg-primr/g, "bg-primary"],
+  [/\btext-primr/g, "text-primary"],
+  [/\bfont-bol\b/g, "font-bold"],
+  [/\bjustify-beetween\b/g, "justify-between"],
+  [/\bpadding-/g, "p-{n} (use Tailwind shorthand)"],
+  [/\bmargin-/g, "m-{n} (use Tailwind shorthand)"],
+  [/\bhover-:/g, "hover:"],
+  [/\bfocus-:/g, "focus:"],
+];
+
+// ---------------------------------------------------------------------------
+// React hook names that imply "use client"
+// ---------------------------------------------------------------------------
+
+const CLIENT_HOOKS = new Set([
+  "useState",
+  "useEffect",
+  "useRef",
+  "useCallback",
+  "useMemo",
+  "useReducer",
+  "useContext",
+  "useLayoutEffect",
+  "useImperativeHandle",
+  "useId",
+  "useDeferredValue",
+  "useTransition",
+]);
+
+// React built-ins that don't need an explicit import in JSX
+const BUILT_INS = new Set([
+  "React",
+  "Fragment",
+  "Suspense",
+  "StrictMode",
+  "Component",
+  "PureComponent",
+  "ErrorBoundary",
+  "Children",
+]);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract all JSX element names used in a source string (e.g. <Button …/>) */
 function extractJsxElements(source: string): Set<string> {
   const elements = new Set<string>();
-  // Match opening/self-closing JSX tags starting with uppercase
-  const re = /<([A-Z][A-Za-z0-9]*)/g;
+  const re = /<([A-Z][A-Za-z0-9.]*)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
-    elements.add(m[1]);
+    // Handle namespaced: Sheet.Content → Sheet
+    elements.add(m[1].split(".")[0]);
   }
   return elements;
 }
 
-/** Extract all named imports from a source string */
 function extractImportedNames(source: string): Set<string> {
   const names = new Set<string>();
-  // import { A, B as C, D } from "..."
-  const re = /import\s+\{([^}]+)\}/g;
+  const namedRe = /import\s*\{([^}]+)\}/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(source)) !== null) {
+  while ((m = namedRe.exec(source)) !== null) {
     for (const part of m[1].split(",")) {
       const trimmed = part.trim();
-      // Handle "X as Y" aliases — the local name is Y
       const asPart = trimmed.split(/\s+as\s+/);
-      names.add(asPart[asPart.length - 1].trim());
+      const localName = asPart[asPart.length - 1].trim();
+      if (localName) names.add(localName);
     }
   }
-  // import DefaultExport from "..."
   const defaultRe = /import\s+([A-Z][A-Za-z0-9]*)\s+from/g;
   while ((m = defaultRe.exec(source)) !== null) {
     names.add(m[1]);
@@ -63,35 +112,65 @@ function extractImportedNames(source: string): Set<string> {
   return names;
 }
 
-/** Check @/ alias imports and verify target paths exist in the FS */
-function checkAliasImports(
-  source: string,
-  allPaths: Set<string>
-): string[] {
+function checkAliasImports(source: string, allPaths: Set<string>): string[] {
   const issues: string[] = [];
   const re = /from\s+["']@\/([^"']+)["']/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
-    const relativePath = m[1];
-    // Strip extension variants and check existence
-    const candidates = [
-      `/${relativePath}`,
-      `/${relativePath}.tsx`,
-      `/${relativePath}.ts`,
-      `/${relativePath}.jsx`,
-      `/${relativePath}.js`,
-      `/${relativePath}/index.tsx`,
-      `/${relativePath}/index.ts`,
-    ];
-    const exists = candidates.some((c) => allPaths.has(c));
-    if (!exists) {
-      // Only flag if not a known Shadcn ui path or registry block path
-      const isShadcnUi = relativePath.startsWith("components/ui/");
-      const isBlock = relativePath.startsWith("components/blocks/");
-      if (!isShadcnUi && !isBlock) {
-        issues.push(`Missing module: "@/${relativePath}" (referenced in import but not found in virtual FS)`);
-      }
+    const rel = m[1];
+    // Known safe prefixes — Shadcn ui, blocks, and app-level lib modules
+    if (
+      rel.startsWith("components/ui/") ||
+      rel.startsWith("components/blocks/") ||
+      rel.startsWith("lib/") ||
+      rel.startsWith("hooks/")
+    ) {
+      continue;
     }
+    const candidates = [
+      `/${rel}`,
+      `/${rel}.tsx`,
+      `/${rel}.ts`,
+      `/${rel}.jsx`,
+      `/${rel}.js`,
+      `/${rel}/index.tsx`,
+      `/${rel}/index.ts`,
+    ];
+    if (!candidates.some((c) => allPaths.has(c))) {
+      issues.push(
+        `Broken alias import "@/${rel}" — path not found in virtual FS.`
+      );
+    }
+  }
+  return issues;
+}
+
+function checkMissingUseClient(path: string, source: string): string | null {
+  const hasDirective =
+    source.trimStart().startsWith('"use client"') ||
+    source.trimStart().startsWith("'use client'");
+  if (hasDirective) return null;
+
+  const usedHooks = [...CLIENT_HOOKS].filter((h) =>
+    new RegExp(`\\b${h}\\s*\\(`).test(source)
+  );
+  if (usedHooks.length === 0) return null;
+
+  return (
+    `${path}: uses React hook(s) [${usedHooks.join(", ")}] ` +
+    `but is missing "use client" directive at the top of the file.`
+  );
+}
+
+function checkTailwindTypos(path: string, source: string): string[] {
+  const issues: string[] = [];
+  for (const [pattern, suggestion] of TAILWIND_TYPOS) {
+    if (pattern.test(source)) {
+      issues.push(
+        `${path}: possible Tailwind typo (matches /${pattern.source}/) — did you mean "${suggestion}"?`
+      );
+    }
+    pattern.lastIndex = 0; // reset global RegExp state
   }
   return issues;
 }
@@ -105,50 +184,55 @@ export function useValidateFs({ files, status, onIssues }: ValidateFsOptions) {
   const onIssuesRef = useRef(onIssues);
   onIssuesRef.current = onIssues;
 
+  // Track last-checked file-count to guard against re-triggers on the same
+  // generation (e.g. React Strict Mode double-effects in development).
+  const lastCheckedSizeRef = useRef<number>(-1);
+
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
     prevStatusRef.current = status;
 
-    // Only validate when stream just finished
+    // Only run when the stream just transitioned to idle
     const justFinished =
       (prevStatus === "streaming" || prevStatus === "submitted") &&
       status === "idle";
 
     if (!justFinished) return;
     if (files.size === 0) return;
+    if (files.size === lastCheckedSizeRef.current) return;
+    lastCheckedSizeRef.current = files.size;
 
     const issues: string[] = [];
     const allPaths = new Set(files.keys());
+    const registryNames = new Set(Object.keys(componentRegistry));
 
-    // Check 1: Missing entry point
+    // ── Check 1: Missing entry point ──────────────────────────────────────
     if (!allPaths.has("/App.tsx") && !allPaths.has("/App.jsx")) {
-      issues.push("No entry point found — expected /App.tsx or /App.jsx.");
+      issues.push(
+        "No entry point: expected /App.tsx or /App.jsx at the virtual FS root."
+      );
     }
 
-    // Check 2: Per-file analysis
-    const registryNames = new Set(Object.keys(componentRegistry));
-    // React built-ins and HTML elements to ignore
-    const builtIns = new Set([
-      "React", "Fragment", "Suspense", "StrictMode",
-      "Component", "PureComponent", "ErrorBoundary",
-    ]);
-
+    // ── Per-file checks ───────────────────────────────────────────────────
     for (const [path, content] of files) {
-      if (!path.endsWith(".tsx") && !path.endsWith(".jsx") && !path.endsWith(".ts") && !path.endsWith(".js")) {
-        continue;
-      }
+      const isScript =
+        path.endsWith(".tsx") ||
+        path.endsWith(".jsx") ||
+        path.endsWith(".ts") ||
+        path.endsWith(".js");
+      if (!isScript) continue;
 
       const imported = extractImportedNames(content);
       const usedElements = extractJsxElements(content);
 
-      // Check 2a: Used JSX elements that are not imported
+      // Check 2: Unimported JSX elements
       for (const el of usedElements) {
-        if (!imported.has(el) && !builtIns.has(el)) {
+        if (!imported.has(el) && !BUILT_INS.has(el)) {
           issues.push(`${path}: <${el}> is used but not imported.`);
         }
       }
 
-      // Check 2b: Registry components used without proper importPath
+      // Check 3: Registry components imported from wrong path
       for (const el of usedElements) {
         if (registryNames.has(el) && imported.has(el)) {
           const entry = componentRegistry[el];
@@ -159,15 +243,23 @@ export function useValidateFs({ files, status, onIssues }: ValidateFsOptions) {
             !content.includes(`from "@/components/blocks`)
           ) {
             issues.push(
-              `${path}: <${el}> is imported but not from the expected path "${entry.importPath}".`
+              `${path}: <${el}> imported but not from expected path "${entry.importPath}".`
             );
           }
         }
       }
 
-      // Check 2c: @/ alias imports pointing to non-existent files
-      const aliasIssues = checkAliasImports(content, allPaths);
-      issues.push(...aliasIssues.map((i) => `${path}: ${i}`));
+      // Check 4: Broken @/ alias imports
+      for (const ai of checkAliasImports(content, allPaths)) {
+        issues.push(`${path}: ${ai}`);
+      }
+
+      // Check 5: Missing "use client" directive
+      const clientIssue = checkMissingUseClient(path, content);
+      if (clientIssue) issues.push(clientIssue);
+
+      // Check 6: Tailwind typos
+      issues.push(...checkTailwindTypos(path, content));
     }
 
     if (issues.length > 0) {

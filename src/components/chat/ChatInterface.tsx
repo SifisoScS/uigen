@@ -18,6 +18,9 @@ import {
   ShoppingCart,
   BookOpen,
   Settings,
+  BarChart2,
+  ListChecks,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTemplates } from "@/lib/templates";
@@ -38,6 +41,9 @@ const TEMPLATE_ICONS: Record<string, React.ElementType> = {
   ShoppingCart,
   BookOpen,
   Settings,
+  BarChart2,
+  ListChecks,
+  Tag,
 };
 
 export function ChatInterface() {
