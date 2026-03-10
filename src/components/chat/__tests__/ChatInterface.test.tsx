@@ -1,25 +1,14 @@
 import { test, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, cleanup } from "@testing-library/react";
 import { ChatInterface } from "../ChatInterface";
 import { useChat } from "@/lib/contexts/chat-context";
 
-// Mock the dependencies
+// Mock dependencies
 vi.mock("@/lib/contexts/chat-context", () => ({
   useChat: vi.fn(),
 }));
 
-vi.mock("@/lib/contexts/file-system-context", () => ({
-  useFileSystem: vi.fn(() => ({
-    createFile: vi.fn(),
-  })),
-}));
-
-vi.mock("@/lib/templates", () => ({
-  getTemplates: vi.fn(() => []),
-}));
-
-// Mock the ScrollArea component
+// Mock ScrollArea
 vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children, className }: any) => (
     <div className={className} data-radix-scroll-area-viewport>
@@ -28,7 +17,7 @@ vi.mock("@/components/ui/scroll-area", () => ({
   ),
 }));
 
-// Mock the child components
+// Mock child components
 vi.mock("../MessageList", () => ({
   MessageList: ({ messages, isLoading }: any) => (
     <div data-testid="message-list">
@@ -53,11 +42,8 @@ vi.mock("../MessageInput", () => ({
   ),
 }));
 
-// A non-empty messages array used by tests that need the message view rendered
-const STUB_MESSAGES = [{ id: "1", role: "user", content: "Hello" }];
-
 const mockUseChat = {
-  messages: STUB_MESSAGES,
+  messages: [{ id: "1", role: "user", content: "Hello" }],
   input: "",
   setInput: vi.fn(),
   handleInputChange: vi.fn(),
@@ -77,6 +63,16 @@ afterEach(() => {
 test("renders chat interface with message list and input", () => {
   render(<ChatInterface />);
 
+  expect(screen.getByTestId("message-list")).toBeDefined();
+  expect(screen.getByTestId("message-input")).toBeDefined();
+});
+
+test("always renders message list and input regardless of message count", () => {
+  (useChat as any).mockReturnValue({ ...mockUseChat, messages: [] });
+
+  render(<ChatInterface />);
+
+  // ChatInterface always renders both — empty state is handled by WelcomeFullScreen
   expect(screen.getByTestId("message-list")).toBeDefined();
   expect(screen.getByTestId("message-input")).toBeDefined();
 });
@@ -103,7 +99,6 @@ test("passes correct props to MessageList", () => {
 test("passes correct props to MessageInput", () => {
   (useChat as any).mockReturnValue({
     ...mockUseChat,
-    messages: STUB_MESSAGES,
     input: "Test input",
     status: "submitted",
   });
@@ -116,54 +111,37 @@ test("passes correct props to MessageInput", () => {
 });
 
 test("isLoading is true when status is submitted", () => {
-  (useChat as any).mockReturnValue({
-    ...mockUseChat,
-    messages: STUB_MESSAGES,
-    status: "submitted",
-  });
+  (useChat as any).mockReturnValue({ ...mockUseChat, status: "submitted" });
 
   render(<ChatInterface />);
 
-  const submitButton = screen.getByTestId("submit");
-  expect(submitButton).toHaveProperty("disabled", true);
+  expect(screen.getByTestId("submit")).toHaveProperty("disabled", true);
 });
 
 test("isLoading is true when status is streaming", () => {
-  (useChat as any).mockReturnValue({
-    ...mockUseChat,
-    messages: STUB_MESSAGES,
-    status: "streaming",
-  });
+  (useChat as any).mockReturnValue({ ...mockUseChat, status: "streaming" });
 
   render(<ChatInterface />);
 
-  const submitButton = screen.getByTestId("submit");
-  expect(submitButton).toHaveProperty("disabled", true);
+  expect(screen.getByTestId("submit")).toHaveProperty("disabled", true);
 });
 
 test("isLoading is false when status is idle", () => {
-  (useChat as any).mockReturnValue({
-    ...mockUseChat,
-    messages: STUB_MESSAGES,
-    status: "idle",
-  });
+  (useChat as any).mockReturnValue({ ...mockUseChat, status: "idle" });
 
   render(<ChatInterface />);
 
-  const submitButton = screen.getByTestId("submit");
-  expect(submitButton).toHaveProperty("disabled", false);
+  expect(screen.getByTestId("submit")).toHaveProperty("disabled", false);
 });
 
 test("scrolls when messages change", () => {
   const { rerender } = render(<ChatInterface />);
 
-  // Get initial scroll container
   const scrollContainer = screen
     .getByTestId("message-list")
     .closest("[data-radix-scroll-area-viewport]");
   expect(scrollContainer).toBeDefined();
 
-  // Update messages — this should trigger the useEffect
   (useChat as any).mockReturnValue({
     ...mockUseChat,
     messages: [
@@ -174,7 +152,6 @@ test("scrolls when messages change", () => {
 
   rerender(<ChatInterface />);
 
-  // Verify component re-rendered with new messages
   const messageList = screen.getByTestId("message-list");
   expect(messageList.textContent).toContain("2 messages");
 });
@@ -195,19 +172,4 @@ test("renders with correct layout classes", () => {
 
   const inputWrapper = screen.getByTestId("message-input").parentElement;
   expect(inputWrapper?.className).toContain("flex-shrink-0");
-});
-
-test("empty state renders when there are no messages", () => {
-  (useChat as any).mockReturnValue({
-    ...mockUseChat,
-    messages: [],
-    status: "idle",
-  });
-
-  render(<ChatInterface />);
-
-  // Empty state shows the heading, not the message list / input components
-  expect(screen.queryByTestId("message-list")).toBeNull();
-  expect(screen.queryByTestId("message-input")).toBeNull();
-  expect(screen.getByText("What do you want to build?")).toBeDefined();
 });
