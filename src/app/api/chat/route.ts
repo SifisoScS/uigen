@@ -7,7 +7,7 @@ import { buildFileManagerTool } from "@/lib/tools/file-manager";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getLanguageModel } from "@/lib/provider";
-import { generationPrompt } from "@/lib/prompts/generation";
+import { getGenerationPrompt } from "@/lib/prompts/generation";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
   const coreMessages = [
     {
       role: "system" as const,
-      content: generationPrompt,
+      content: getGenerationPrompt(),
       providerOptions: {
         anthropic: { cacheControl: { type: "ephemeral" } },
       },
