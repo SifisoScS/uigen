@@ -4,10 +4,11 @@ import { VirtualFileSystem } from "@/lib/file-system";
 import { streamText, appendResponseMessages, convertToCoreMessages } from "ai";
 import { buildStrReplaceTool } from "@/lib/tools/str-replace";
 import { buildFileManagerTool } from "@/lib/tools/file-manager";
+import { buildInsertRegistryComponentTool } from "@/lib/tools/insert-registry-component";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getLanguageModel } from "@/lib/provider";
-import { generationPrompt } from "@/lib/prompts/generation";
+import { getGenerationPrompt } from "@/lib/prompts/generation";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
   const coreMessages = [
     {
       role: "system" as const,
-      content: generationPrompt,
+      content: getGenerationPrompt(),
       providerOptions: {
         anthropic: { cacheControl: { type: "ephemeral" } },
       },
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
     tools: {
       str_replace_editor: buildStrReplaceTool(fileSystem),
       file_manager: buildFileManagerTool(fileSystem),
+      insert_registry_component: buildInsertRegistryComponentTool(),
     },
     onFinish: async ({ response }) => {
       if (!projectId || !session) return;

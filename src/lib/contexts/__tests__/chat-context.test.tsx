@@ -43,6 +43,7 @@ describe("ChatContext", () => {
   };
 
   const mockHandleToolCall = vi.fn();
+  const mockGetAllFiles = vi.fn(() => new Map<string, string>());
 
   const mockUseAIChat = {
     messages: [],
@@ -50,6 +51,8 @@ describe("ChatContext", () => {
     handleInputChange: vi.fn(),
     handleSubmit: vi.fn(),
     status: "idle",
+    append: vi.fn(),
+    setInput: vi.fn(),
   };
 
   beforeEach(() => {
@@ -58,6 +61,7 @@ describe("ChatContext", () => {
     (useFileSystem as any).mockReturnValue({
       fileSystem: mockFileSystem,
       handleToolCall: mockHandleToolCall,
+      getAllFiles: mockGetAllFiles,
     });
 
     (useAIChat as any).mockReturnValue(mockUseAIChat);

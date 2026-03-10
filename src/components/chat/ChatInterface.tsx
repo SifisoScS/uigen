@@ -1,12 +1,29 @@
 "use client";
 
-import { useEffect, useRef, FormEvent } from "react";
+import { useEffect, useRef } from "react";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChat } from "@/lib/contexts/chat-context";
-import { ArrowUp, Layers, LayoutDashboard, MousePointer, FileText, Globe } from "lucide-react";
+import { useFileSystem } from "@/lib/contexts/file-system-context";
+import {
+  ArrowUp,
+  Layers,
+  LayoutDashboard,
+  MousePointer,
+  FileText,
+  Globe,
+  Wand2,
+  User,
+  ShoppingCart,
+  BookOpen,
+  Settings,
+  BarChart2,
+  ListChecks,
+  Tag,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getTemplates } from "@/lib/templates";
 
 const QUICK_ACTIONS = [
   { label: "Button component", icon: MousePointer },
@@ -16,13 +33,29 @@ const QUICK_ACTIONS = [
   { label: "Component library", icon: Layers },
 ];
 
+const TEMPLATE_ICONS: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  Globe,
+  FileText,
+  User,
+  ShoppingCart,
+  BookOpen,
+  Settings,
+  BarChart2,
+  ListChecks,
+  Tag,
+};
+
 export function ChatInterface() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { messages, input, setInput, handleInputChange, handleSubmit, status } =
     useChat();
+  const { createFile } = useFileSystem();
   const isLoading = status === "submitted" || status === "streaming";
   const hasMessages = messages.length > 0;
+
+  const templates = getTemplates();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -39,9 +72,26 @@ export function ChatInterface() {
     textareaRef.current?.focus();
   };
 
+  /** Populate the virtual FS with template files, then prime the chat input. */
+  const handleLoadTemplate = (templateId: string) => {
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
+
+    for (const [path, node] of Object.entries(template.files)) {
+      if (node.type === "file" && node.content !== undefined) {
+        createFile(path, node.content);
+      }
+    }
+
+    setInput(
+      `I've loaded the "${template.name}" starter. Please review the files and suggest improvements or ask what to build next.`
+    );
+    textareaRef.current?.focus();
+  };
+
   if (!hasMessages) {
     return (
-      <div className="h-full flex flex-col items-center justify-center px-6 pb-8">
+      <div className="h-full flex flex-col items-center justify-center px-6 pb-8 overflow-y-auto">
         {/* Heading */}
         <div className="text-center mb-8 select-none">
           <h1 className="text-[2rem] font-semibold text-neutral-100 tracking-tight leading-tight mb-3">
@@ -102,6 +152,35 @@ export function ChatInterface() {
                 {label}
               </button>
             ))}
+          </div>
+
+          {/* Starter template cards */}
+          <div className="mt-7">
+            <p className="text-[11px] font-medium text-neutral-600 uppercase tracking-widest text-center mb-3 select-none">
+              Or start from a template
+            </p>
+            <div className="grid grid-cols-4 gap-2">
+              {templates.map((template) => {
+                const Icon = TEMPLATE_ICONS[template.icon] ?? Wand2;
+                return (
+                  <button
+                    key={template.id}
+                    onClick={() => handleLoadTemplate(template.id)}
+                    className="group flex flex-col items-start gap-1.5 p-3 rounded-xl bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#3a3a3a] hover:bg-[#1f1f1f] transition-all text-left"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-[#252525] group-hover:bg-blue-600/20 border border-[#2e2e2e] group-hover:border-blue-500/30 flex items-center justify-center transition-all">
+                      <Icon className="h-3.5 w-3.5 text-neutral-400 group-hover:text-blue-400 transition-colors" />
+                    </div>
+                    <span className="text-xs font-medium text-neutral-300 group-hover:text-neutral-100 transition-colors leading-tight">
+                      {template.name}
+                    </span>
+                    <span className="text-[10px] text-neutral-600 group-hover:text-neutral-500 leading-tight line-clamp-2 transition-colors">
+                      {template.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
