@@ -30,6 +30,7 @@ vi.mock("ai", () => ({
     toDataStreamResponse: () => new Response("stream", { status: 200 }),
   })),
   appendResponseMessages: vi.fn(() => []),
+  convertToCoreMessages: vi.fn((msgs: unknown[]) => msgs),
 }));
 
 vi.mock("@/lib/tools/str-replace", () => ({

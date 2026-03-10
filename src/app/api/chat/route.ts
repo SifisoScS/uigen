@@ -1,7 +1,7 @@
-import type { CoreMessage } from "ai";
+import type { UIMessage } from "ai";
 import type { FileNode } from "@/lib/file-system";
 import { VirtualFileSystem } from "@/lib/file-system";
-import { streamText, appendResponseMessages } from "ai";
+import { streamText, appendResponseMessages, convertToCoreMessages } from "ai";
 import { buildStrReplaceTool } from "@/lib/tools/str-replace";
 import { buildFileManagerTool } from "@/lib/tools/file-manager";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +12,7 @@ import { checkRateLimit } from "@/lib/rate-limiter";
 import { NextRequest, NextResponse } from "next/server";
 
 interface ChatRequest {
-  messages: CoreMessage[];
+  messages: UIMessage[];
   files: Record<string, FileNode>;
   projectId?: string;
 }
@@ -91,13 +91,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  messages.unshift({
-    role: "system",
-    content: generationPrompt,
-    providerOptions: {
-      anthropic: { cacheControl: { type: "ephemeral" } },
+  // Build CoreMessage array for streamText (prepend system prompt)
+  const coreMessages = [
+    {
+      role: "system" as const,
+      content: generationPrompt,
+      providerOptions: {
+        anthropic: { cacheControl: { type: "ephemeral" } },
+      },
     },
-  });
+    ...convertToCoreMessages(messages),
+  ];
 
   // Reconstruct the VirtualFileSystem from serialized data
   const fileSystem = new VirtualFileSystem();
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
   const isMockProvider = !process.env.ANTHROPIC_API_KEY;
   const result = streamText({
     model,
-    messages,
+    messages: coreMessages,
     maxTokens: 10_000,
     maxSteps: isMockProvider ? 4 : 40,
     onError: ({ error }) => {
