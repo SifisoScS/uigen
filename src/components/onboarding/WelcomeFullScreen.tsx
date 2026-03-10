@@ -102,7 +102,30 @@ export function WelcomeFullScreen({ user }: WelcomeFullScreenProps) {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center bg-[#0f0f0f] overflow-y-auto px-4">
+    <div className="min-h-screen w-full flex flex-col items-center bg-[#0f0f0f] overflow-y-auto px-4 relative">
+      {/* ── Top-right auth CTA — immediately visible without scrolling ─────── */}
+      {!user && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openAuth("signin")}
+            className="h-8 px-3 text-xs border-[#2a2a2a] bg-[#141414]/80 backdrop-blur text-neutral-400 hover:text-neutral-200 hover:bg-[#1e1e1e] hover:border-[#3a3a3a] gap-1.5"
+          >
+            <LogIn className="h-3 w-3" aria-hidden />
+            Sign in
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => openAuth("signup")}
+            className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+          >
+            <UserPlus className="h-3 w-3" aria-hidden />
+            Get started
+          </Button>
+        </div>
+      )}
+
       {/* Hero + Input — vertically centered in the viewport on load */}
       <div className="flex flex-col items-center justify-center w-full pt-[12vh] pb-10">
         {/* Brand icon */}
@@ -234,32 +257,24 @@ export function WelcomeFullScreen({ user }: WelcomeFullScreenProps) {
           })}
         </div>
 
-        {/* Auth nudge — anonymous users only */}
+        {/* Auth nudge at the bottom — subtle reminder after scrolling templates */}
         {!user && (
-          <div className="mt-12 text-center">
-            <p className="text-sm text-neutral-600 mb-4">
-              Sign in to save your designs across sessions
-            </p>
-            <div className="flex items-center gap-3 justify-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openAuth("signin")}
-                className="border-[#2a2a2a] bg-[#1a1a1a] text-neutral-400 hover:text-neutral-200 hover:bg-[#222] hover:border-[#3a3a3a] gap-1.5"
-              >
-                <LogIn className="h-3.5 w-3.5" aria-hidden />
-                Sign in
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => openAuth("signup")}
-                className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
-              >
-                <UserPlus className="h-3.5 w-3.5" aria-hidden />
-                Create account
-              </Button>
-            </div>
-          </div>
+          <p className="mt-10 text-xs text-neutral-700 text-center">
+            <button
+              onClick={() => openAuth("signin")}
+              className="underline underline-offset-2 hover:text-neutral-500 transition-colors"
+            >
+              Sign in
+            </button>
+            {" or "}
+            <button
+              onClick={() => openAuth("signup")}
+              className="underline underline-offset-2 hover:text-neutral-500 transition-colors"
+            >
+              create an account
+            </button>
+            {" to save your designs across sessions."}
+          </p>
         )}
       </div>
 

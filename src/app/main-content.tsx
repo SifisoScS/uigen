@@ -113,9 +113,7 @@ function AppShell({ user, project }: MainContentProps) {
                   </TabsList>
                 </Tabs>
 
-                {project?.id && (
-                  <ExportButton projectName={project.name} />
-                )}
+                <ExportButton projectName={project?.name} />
               </div>
 
               {/* Panel content */}
