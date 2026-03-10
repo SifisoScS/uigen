@@ -16,8 +16,10 @@ test("renders with placeholder text", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
-  const textarea = screen.getByPlaceholderText("Describe the React component you want to create...");
+
+  const textarea = screen.getByPlaceholderText(
+    "Describe changes or a new component…"
+  );
   expect(textarea).toBeDefined();
 });
 
@@ -30,7 +32,7 @@ test("displays the input value", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const textarea = screen.getByDisplayValue("Test input value");
   expect(textarea).toBeDefined();
 });
@@ -45,10 +47,12 @@ test("calls handleInputChange when typing", async () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
-  const textarea = screen.getByPlaceholderText("Describe the React component you want to create...");
+
+  const textarea = screen.getByPlaceholderText(
+    "Describe changes or a new component…"
+  );
   await userEvent.type(textarea, "Hello");
-  
+
   expect(handleInputChange).toHaveBeenCalled();
 });
 
@@ -62,10 +66,10 @@ test("calls handleSubmit when form is submitted", async () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const form = screen.getByRole("textbox").closest("form")!;
   fireEvent.submit(form);
-  
+
   expect(handleSubmit).toHaveBeenCalledOnce();
 });
 
@@ -79,10 +83,10 @@ test("submits form when Enter is pressed without shift", async () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const textarea = screen.getByRole("textbox");
   fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
-  
+
   expect(handleSubmit).toHaveBeenCalledOnce();
 });
 
@@ -96,10 +100,10 @@ test("does not submit form when Enter is pressed with shift", async () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const textarea = screen.getByRole("textbox");
   fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
-  
+
   expect(handleSubmit).not.toHaveBeenCalled();
 });
 
@@ -112,7 +116,7 @@ test("disables textarea when isLoading is true", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const textarea = screen.getByRole("textbox");
   expect(textarea).toHaveProperty("disabled", true);
 });
@@ -126,7 +130,7 @@ test("disables submit button when isLoading is true", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const submitButton = screen.getByRole("button");
   expect(submitButton).toHaveProperty("disabled", true);
 });
@@ -140,7 +144,7 @@ test("disables submit button when input is empty", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const submitButton = screen.getByRole("button");
   expect(submitButton).toHaveProperty("disabled", true);
 });
@@ -154,7 +158,7 @@ test("disables submit button when input contains only whitespace", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const submitButton = screen.getByRole("button");
   expect(submitButton).toHaveProperty("disabled", true);
 });
@@ -168,7 +172,7 @@ test("enables submit button when input has content and not loading", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const submitButton = screen.getByRole("button");
   expect(submitButton).toHaveProperty("disabled", false);
 });
@@ -184,8 +188,8 @@ test("applies correct CSS classes based on loading state", () => {
   );
 
   let submitButton = screen.getByRole("button");
-  expect(submitButton.className).toContain("disabled:opacity-40");
-  expect(submitButton.className).toContain("hover:bg-blue-50");
+  // Active state — blue background
+  expect(submitButton.className).toContain("bg-blue-600");
 
   rerender(
     <MessageInput
@@ -197,11 +201,12 @@ test("applies correct CSS classes based on loading state", () => {
   );
 
   submitButton = screen.getByRole("button");
-  expect(submitButton.className).toContain("disabled:cursor-not-allowed");
-  expect(submitButton.className).toContain("disabled:opacity-40");
+  // Disabled/loading state — muted background
+  expect(submitButton.className).toContain("bg-[#252525]");
+  expect(submitButton.className).toContain("cursor-not-allowed");
 });
 
-test("applies pulse animation to send icon when loading", () => {
+test("applies muted styling to send icon when loading", () => {
   const { rerender } = render(
     <MessageInput
       input="Test"
@@ -211,8 +216,9 @@ test("applies pulse animation to send icon when loading", () => {
     />
   );
 
-  let sendIcon = screen.getByRole("button").querySelector("svg");
-  expect(sendIcon?.getAttribute("class")).not.toContain("animate-pulse");
+  // Not loading — button has blue background
+  let submitButton = screen.getByRole("button");
+  expect(submitButton.className).toContain("bg-blue-600");
 
   rerender(
     <MessageInput
@@ -223,8 +229,9 @@ test("applies pulse animation to send icon when loading", () => {
     />
   );
 
-  sendIcon = screen.getByRole("button").querySelector("svg");
-  expect(sendIcon?.getAttribute("class")).toContain("text-neutral-300");
+  // Loading — button has muted background
+  submitButton = screen.getByRole("button");
+  expect(submitButton.className).toContain("bg-[#252525]");
 });
 
 test("textarea has correct styling classes", () => {
@@ -236,13 +243,11 @@ test("textarea has correct styling classes", () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const textarea = screen.getByRole("textbox");
-  expect(textarea.className).toContain("min-h-[80px]");
-  expect(textarea.className).toContain("max-h-[200px]");
   expect(textarea.className).toContain("resize-none");
-  expect(textarea.className).toContain("focus:ring-2");
-  expect(textarea.className).toContain("focus:ring-blue-500/10");
+  expect(textarea.className).toContain("focus:outline-none");
+  expect(textarea.className).toContain("bg-transparent");
 });
 
 test("submit button click triggers form submission", async () => {
@@ -255,9 +260,9 @@ test("submit button click triggers form submission", async () => {
   };
 
   render(<MessageInput {...mockProps} />);
-  
+
   const submitButton = screen.getByRole("button");
   await userEvent.click(submitButton);
-  
+
   expect(handleSubmit).toHaveBeenCalledOnce();
 });

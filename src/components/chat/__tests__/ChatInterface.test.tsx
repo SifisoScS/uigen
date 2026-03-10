@@ -43,9 +43,13 @@ vi.mock("../MessageInput", () => ({
   ),
 }));
 
+// A non-empty messages array used by tests that need the message view rendered
+const STUB_MESSAGES = [{ id: "1", role: "user", content: "Hello" }];
+
 const mockUseChat = {
-  messages: [],
+  messages: STUB_MESSAGES,
   input: "",
+  setInput: vi.fn(),
   handleInputChange: vi.fn(),
   handleSubmit: vi.fn(),
   status: "idle" as const,
@@ -72,7 +76,7 @@ test("passes correct props to MessageList", () => {
     { id: "1", role: "user", content: "Hello" },
     { id: "2", role: "assistant", content: "Hi there!" },
   ];
-  
+
   (useChat as any).mockReturnValue({
     ...mockUseChat,
     messages,
@@ -89,6 +93,7 @@ test("passes correct props to MessageList", () => {
 test("passes correct props to MessageInput", () => {
   (useChat as any).mockReturnValue({
     ...mockUseChat,
+    messages: STUB_MESSAGES,
     input: "Test input",
     status: "submitted",
   });
@@ -103,6 +108,7 @@ test("passes correct props to MessageInput", () => {
 test("isLoading is true when status is submitted", () => {
   (useChat as any).mockReturnValue({
     ...mockUseChat,
+    messages: STUB_MESSAGES,
     status: "submitted",
   });
 
@@ -115,6 +121,7 @@ test("isLoading is true when status is submitted", () => {
 test("isLoading is true when status is streaming", () => {
   (useChat as any).mockReturnValue({
     ...mockUseChat,
+    messages: STUB_MESSAGES,
     status: "streaming",
   });
 
@@ -127,6 +134,7 @@ test("isLoading is true when status is streaming", () => {
 test("isLoading is false when status is idle", () => {
   (useChat as any).mockReturnValue({
     ...mockUseChat,
+    messages: STUB_MESSAGES,
     status: "idle",
   });
 
@@ -136,15 +144,16 @@ test("isLoading is false when status is idle", () => {
   expect(submitButton).toHaveProperty("disabled", false);
 });
 
-
 test("scrolls when messages change", () => {
   const { rerender } = render(<ChatInterface />);
 
   // Get initial scroll container
-  const scrollContainer = screen.getByTestId("message-list").closest("[data-radix-scroll-area-viewport]");
+  const scrollContainer = screen
+    .getByTestId("message-list")
+    .closest("[data-radix-scroll-area-viewport]");
   expect(scrollContainer).toBeDefined();
 
-  // Update messages - this should trigger the useEffect
+  // Update messages — this should trigger the useEffect
   (useChat as any).mockReturnValue({
     ...mockUseChat,
     messages: [
@@ -167,13 +176,28 @@ test("renders with correct layout classes", () => {
   expect(mainDiv.className).toContain("flex");
   expect(mainDiv.className).toContain("flex-col");
   expect(mainDiv.className).toContain("h-full");
-  expect(mainDiv.className).toContain("p-4");
   expect(mainDiv.className).toContain("overflow-hidden");
 
-  const scrollArea = screen.getByTestId("message-list").closest(".flex-1");
+  const scrollArea = screen
+    .getByTestId("message-list")
+    .closest(".flex-1");
   expect(scrollArea?.className).toContain("overflow-hidden");
 
   const inputWrapper = screen.getByTestId("message-input").parentElement;
-  expect(inputWrapper?.className).toContain("mt-4");
   expect(inputWrapper?.className).toContain("flex-shrink-0");
+});
+
+test("empty state renders when there are no messages", () => {
+  (useChat as any).mockReturnValue({
+    ...mockUseChat,
+    messages: [],
+    status: "idle",
+  });
+
+  render(<ChatInterface />);
+
+  // Empty state shows the heading, not the message list / input components
+  expect(screen.queryByTestId("message-list")).toBeNull();
+  expect(screen.queryByTestId("message-input")).toBeNull();
+  expect(screen.getByText("What do you want to build?")).toBeDefined();
 });

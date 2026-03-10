@@ -59,7 +59,6 @@ test("FileTree renders empty state when no files exist", () => {
   render(<FileTree />);
 
   expect(screen.getByText("No files yet")).toBeDefined();
-  expect(screen.getByText("Files will appear here")).toBeDefined();
 });
 
 test("FileTree renders files and directories", () => {
@@ -179,7 +178,7 @@ test("FileTreeNode expands and collapses directories", () => {
 
   // Find the chevron icon next to "parent" directory
   const parentDiv = screen.getByText("parent").parentElement;
-  const chevronDown = parentDiv?.querySelector(".h-3\\.5.w-3\\.5");
+  const chevronDown = parentDiv?.querySelector(".h-3.w-3");
   expect(chevronDown?.textContent).toBe("ChevronDown");
 
   // Click to collapse
@@ -187,7 +186,7 @@ test("FileTreeNode expands and collapses directories", () => {
 
   // Child should be hidden, chevron should point right
   expect(screen.queryByText("child.txt")).toBeNull();
-  const chevronRight = parentDiv?.querySelector(".h-3\\.5.w-3\\.5");
+  const chevronRight = parentDiv?.querySelector(".h-3.w-3");
   expect(chevronRight?.textContent).toBe("ChevronRight");
 });
 
@@ -245,8 +244,8 @@ test("FileTreeNode highlights selected file", () => {
 
   // Find the div containing the file name
   const fileDiv = screen.getByText("selected.js").parentElement;
-  expect(fileDiv?.className).toContain("bg-blue-50");
-  expect(fileDiv?.className).toContain("text-blue-600");
+  expect(fileDiv?.className).toContain("bg-[#1e2d47]");
+  expect(fileDiv?.className).toContain("text-blue-300");
 });
 
 test("FileTree renders nested directory structure", () => {
