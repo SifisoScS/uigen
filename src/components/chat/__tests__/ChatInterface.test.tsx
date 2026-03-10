@@ -9,6 +9,16 @@ vi.mock("@/lib/contexts/chat-context", () => ({
   useChat: vi.fn(),
 }));
 
+vi.mock("@/lib/contexts/file-system-context", () => ({
+  useFileSystem: vi.fn(() => ({
+    createFile: vi.fn(),
+  })),
+}));
+
+vi.mock("@/lib/templates", () => ({
+  getTemplates: vi.fn(() => []),
+}));
+
 // Mock the ScrollArea component
 vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children, className }: any) => (

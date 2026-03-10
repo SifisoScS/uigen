@@ -43,6 +43,7 @@ vi.mock("@/lib/tools/file-manager", () => ({
 
 vi.mock("@/lib/prompts/generation", () => ({
   generationPrompt: "You are a test assistant.",
+  getGenerationPrompt: () => "You are a test assistant.",
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
