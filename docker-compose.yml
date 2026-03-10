@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Required for real AI responses; omit to use the built-in mock model
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Must be a long random secret in production
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      NODE_ENV: production
+      # Point Prisma at the mounted volume
+      DATABASE_URL: file:/data/prod.db
+    volumes:
+      # Persist the SQLite database outside the container
+      - db-data:/data
+    restart: unless-stopped
+
+volumes:
+  db-data:
