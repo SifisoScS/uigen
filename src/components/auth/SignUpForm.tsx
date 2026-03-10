@@ -10,6 +10,72 @@ interface SignUpFormProps {
   onSuccess?: () => void;
 }
 
+type PasswordStrength = "weak" | "medium" | "strong";
+
+function getPasswordStrength(password: string): PasswordStrength | null {
+  if (password.length === 0) return null;
+  if (password.length < 8) return "weak";
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasDigit = /\d/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const score =
+    (hasUppercase ? 1 : 0) +
+    (hasLowercase ? 1 : 0) +
+    (hasDigit ? 1 : 0) +
+    (hasSpecial ? 1 : 0);
+  if (password.length >= 12 && score >= 3) return "strong";
+  if (score >= 2) return "medium";
+  return "weak";
+}
+
+const STRENGTH_CONFIG: Record<
+  PasswordStrength,
+  { label: string; bars: number; color: string }
+> = {
+  weak: { label: "Weak", bars: 1, color: "bg-red-500" },
+  medium: { label: "Fair", bars: 2, color: "bg-yellow-500" },
+  strong: { label: "Strong", bars: 3, color: "bg-green-500" },
+};
+
+function PasswordStrengthMeter({ password }: { password: string }) {
+  const strength = getPasswordStrength(password);
+  const { label, bars, color } = strength ? STRENGTH_CONFIG[strength] : { label: "", bars: 0, color: "" };
+
+  return (
+    <div id="password-strength" aria-live="polite" aria-atomic="true" className="space-y-1">
+      {strength && (
+        <>
+          <div className="flex gap-1">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`h-1 flex-1 rounded-full transition-colors ${
+                  i <= bars ? color : "bg-neutral-200"
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500">
+            Password strength:{" "}
+            <span
+              className={
+                strength === "strong"
+                  ? "text-green-600"
+                  : strength === "medium"
+                    ? "text-yellow-600"
+                    : "text-red-600"
+              }
+            >
+              {label}
+            </span>
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function SignUpForm({ onSuccess }: SignUpFormProps) {
   const { signUp, isLoading } = useAuth();
   const [email, setEmail] = useState("");
@@ -29,7 +95,6 @@ export function SignUpForm({ onSuccess }: SignUpFormProps) {
     const result = await signUp(email, password);
 
     if (result.success) {
-      // The redirect is handled by the hook
       onSuccess?.();
     } else {
       setError(result.error || "Failed to sign up");
@@ -61,10 +126,9 @@ export function SignUpForm({ onSuccess }: SignUpFormProps) {
           required
           disabled={isLoading}
           minLength={8}
+          aria-describedby="password-strength"
         />
-        <p className="text-xs text-gray-500">
-          Must be at least 8 characters long
-        </p>
+        <PasswordStrengthMeter password={password} />
       </div>
 
       <div className="space-y-2">

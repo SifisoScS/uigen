@@ -1,10 +1,15 @@
 "use server";
 
 import bcrypt from "bcrypt";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createSession, deleteSession, getSession } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limiter";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+
+// Auth endpoints are brute-force targets — stricter limit: 10 per 15 min.
+const AUTH_RATE_LIMIT = { windowMs: 15 * 60_000, maxRequests: 10 };
 
 export interface AuthResult {
   success: boolean;
@@ -16,6 +21,19 @@ export async function signUp(
   password: string
 ): Promise<AuthResult> {
   try {
+    const h = await headers();
+    const ip =
+      h.get("x-forwarded-for")?.split(",")[0].trim() ??
+      h.get("x-real-ip") ??
+      "anonymous";
+    const rateLimit = checkRateLimit(`auth-signup:${ip}`, AUTH_RATE_LIMIT);
+    if (!rateLimit.allowed) {
+      return {
+        success: false,
+        error: "Too many attempts. Please wait before trying again.",
+      };
+    }
+
     // Validate input
     if (!email || !password) {
       return { success: false, error: "Email and password are required" };
@@ -64,6 +82,19 @@ export async function signIn(
   password: string
 ): Promise<AuthResult> {
   try {
+    const h = await headers();
+    const ip =
+      h.get("x-forwarded-for")?.split(",")[0].trim() ??
+      h.get("x-real-ip") ??
+      "anonymous";
+    const rateLimit = checkRateLimit(`auth-signin:${ip}`, AUTH_RATE_LIMIT);
+    if (!rateLimit.allowed) {
+      return {
+        success: false,
+        error: "Too many attempts. Please wait before trying again.",
+      };
+    }
+
     // Validate input
     if (!email || !password) {
       return { success: false, error: "Email and password are required" };
