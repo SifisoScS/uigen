@@ -33,10 +33,7 @@ function FileTreeNode({ node, level }: FileTreeNodeProps) {
   const children =
     node.type === "directory" && node.children
       ? Array.from(node.children.values()).sort((a, b) => {
-          // Directories first, then files
-          if (a.type !== b.type) {
-            return a.type === "directory" ? -1 : 1;
-          }
+          if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
           return a.name.localeCompare(b.name);
         })
       : [];
@@ -45,32 +42,34 @@ function FileTreeNode({ node, level }: FileTreeNodeProps) {
     <div>
       <div
         className={cn(
-          "flex items-center gap-2 px-2 py-1.5 hover:bg-gray-100 cursor-pointer text-sm transition-colors",
-          selectedFile === node.path && "bg-blue-50 text-blue-600"
+          "flex items-center gap-1.5 py-1 cursor-pointer text-xs transition-colors select-none",
+          selectedFile === node.path
+            ? "bg-[#1e2d47] text-blue-300"
+            : "text-neutral-500 hover:text-neutral-300 hover:bg-[#181818]"
         )}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        style={{ paddingLeft: `${level * 12 + 8}px`, paddingRight: "8px" }}
         onClick={handleClick}
       >
         {node.type === "directory" ? (
           <>
             {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+              <ChevronDown className="h-3 w-3 shrink-0 text-neutral-600" />
             ) : (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+              <ChevronRight className="h-3 w-3 shrink-0 text-neutral-600" />
             )}
             {isExpanded ? (
-              <FolderOpen className="h-4 w-4 shrink-0 text-blue-500" />
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-blue-500/70" />
             ) : (
-              <Folder className="h-4 w-4 shrink-0 text-blue-500" />
+              <Folder className="h-3.5 w-3.5 shrink-0 text-blue-500/70" />
             )}
           </>
         ) : (
           <>
-            <div className="w-3.5" />
-            <FileCode className="h-4 w-4 shrink-0 text-gray-400" />
+            <div className="w-3 shrink-0" />
+            <FileCode className="h-3.5 w-3.5 shrink-0 text-neutral-600" />
           </>
         )}
-        <span className="truncate text-gray-700">{node.name}</span>
+        <span className="truncate">{node.name}</span>
       </div>
       {node.type === "directory" && isExpanded && children.length > 0 && (
         <div>
@@ -90,23 +89,23 @@ export function FileTree() {
   if (!rootNode || !rootNode.children || rootNode.children.size === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-        <Folder className="h-12 w-12 text-gray-300 mb-3" />
-        <p className="text-sm text-gray-500">No files yet</p>
-        <p className="text-xs text-gray-400 mt-1">Files will appear here</p>
+        <Folder className="h-8 w-8 text-neutral-700 mb-2" />
+        <p className="text-xs text-neutral-600">No files yet</p>
       </div>
     );
   }
 
   const rootChildren = Array.from(rootNode.children.values()).sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === "directory" ? -1 : 1;
-    }
+    if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
 
   return (
     <ScrollArea className="h-full">
       <div className="py-2">
+        <div className="text-[10px] font-medium text-neutral-700 uppercase tracking-wider px-3 mb-1.5">
+          Files
+        </div>
         {rootChildren.map((child) => (
           <FileTreeNode key={child.path} node={child} level={0} />
         ))}
