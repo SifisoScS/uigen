@@ -1,3 +1,4 @@
+import type { CoreMessage } from "ai";
 import type { FileNode } from "@/lib/file-system";
 import { VirtualFileSystem } from "@/lib/file-system";
 import { streamText, appendResponseMessages } from "ai";
@@ -11,8 +12,7 @@ import { checkRateLimit } from "@/lib/rate-limiter";
 import { NextRequest, NextResponse } from "next/server";
 
 interface ChatRequest {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  messages: any[];
+  messages: CoreMessage[];
   files: Record<string, FileNode>;
   projectId?: string;
 }

@@ -40,35 +40,38 @@ const STRENGTH_CONFIG: Record<
 
 function PasswordStrengthMeter({ password }: { password: string }) {
   const strength = getPasswordStrength(password);
-  if (!strength) return null;
-  const { label, bars, color } = STRENGTH_CONFIG[strength];
+  const { label, bars, color } = strength ? STRENGTH_CONFIG[strength] : { label: "", bars: 0, color: "" };
 
   return (
-    <div className="space-y-1" aria-label={`Password strength: ${label}`}>
-      <div className="flex gap-1">
-        {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`h-1 flex-1 rounded-full transition-colors ${
-              i <= bars ? color : "bg-neutral-200"
-            }`}
-          />
-        ))}
-      </div>
-      <p className="text-xs text-neutral-500">
-        Password strength:{" "}
-        <span
-          className={
-            strength === "strong"
-              ? "text-green-600"
-              : strength === "medium"
-                ? "text-yellow-600"
-                : "text-red-600"
-          }
-        >
-          {label}
-        </span>
-      </p>
+    <div id="password-strength" aria-live="polite" aria-atomic="true" className="space-y-1">
+      {strength && (
+        <>
+          <div className="flex gap-1">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`h-1 flex-1 rounded-full transition-colors ${
+                  i <= bars ? color : "bg-neutral-200"
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500">
+            Password strength:{" "}
+            <span
+              className={
+                strength === "strong"
+                  ? "text-green-600"
+                  : strength === "medium"
+                    ? "text-yellow-600"
+                    : "text-red-600"
+              }
+            >
+              {label}
+            </span>
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -123,6 +126,7 @@ export function SignUpForm({ onSuccess }: SignUpFormProps) {
           required
           disabled={isLoading}
           minLength={8}
+          aria-describedby="password-strength"
         />
         <PasswordStrengthMeter password={password} />
       </div>

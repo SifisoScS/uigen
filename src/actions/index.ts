@@ -11,16 +11,6 @@ import { redirect } from "next/navigation";
 // Auth endpoints are brute-force targets — stricter limit: 10 per 15 min.
 const AUTH_RATE_LIMIT = { windowMs: 15 * 60_000, maxRequests: 10 };
 
-async function getClientIp(): Promise<string> {
-  const h = await headers();
-  return (
-    h.get("x-forwarded-for")?.split(",")[0].trim() ??
-    h.get("x-real-ip") ??
-    "anonymous"
-  );
-}
-
-
 export interface AuthResult {
   success: boolean;
   error?: string;
@@ -31,7 +21,11 @@ export async function signUp(
   password: string
 ): Promise<AuthResult> {
   try {
-    const ip = await getClientIp();
+    const h = await headers();
+    const ip =
+      h.get("x-forwarded-for")?.split(",")[0].trim() ??
+      h.get("x-real-ip") ??
+      "anonymous";
     const rateLimit = checkRateLimit(`auth-signup:${ip}`, AUTH_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return {
@@ -88,7 +82,11 @@ export async function signIn(
   password: string
 ): Promise<AuthResult> {
   try {
-    const ip = await getClientIp();
+    const h = await headers();
+    const ip =
+      h.get("x-forwarded-for")?.split(",")[0].trim() ??
+      h.get("x-real-ip") ??
+      "anonymous";
     const rateLimit = checkRateLimit(`auth-signin:${ip}`, AUTH_RATE_LIMIT);
     if (!rateLimit.allowed) {
       return {
