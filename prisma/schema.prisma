@@ -25,6 +25,7 @@ model Project {
   id        String   @id @default(cuid())
   name      String
   userId    String?
+  public    Boolean  @default(false)
   messages  String   @default("[]")
   data      String   @default("{}")
   createdAt DateTime @default(now())

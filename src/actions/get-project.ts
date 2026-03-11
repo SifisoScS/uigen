@@ -14,9 +14,12 @@ export async function getProject(projectId: string) {
     throw new Error("Project not found");
   }
 
-  // If the project belongs to a specific user, verify the requester matches.
-  // Anonymous projects (userId === null) are accessible without authentication.
-  if (project.userId && (!session || project.userId !== session.userId)) {
+  // isOwner: no userId (anonymous project) OR the session user owns it
+  const isOwner =
+    !project.userId || (!!session && project.userId === session.userId);
+
+  // Allow access if owner OR project is public
+  if (!isOwner && !project.public) {
     throw new Error("Unauthorized");
   }
 
@@ -38,6 +41,8 @@ export async function getProject(projectId: string) {
     name: project.name,
     messages,
     data,
+    isPublic: project.public,
+    isOwner,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
