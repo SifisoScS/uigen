@@ -149,9 +149,9 @@ test("createImportMap creates placeholder modules for missing imports", () => {
   const result = createImportMap(files);
   const parsed = JSON.parse(result.importMap);
 
-  // Should create placeholder for missing Button component
-  expect(parsed.imports["./components/Button"]).toBeDefined();
-  expect(parsed.imports["./components/Button"]).toMatch(/^blob:mock-url-/);
+  // Should create placeholder for missing Button component (absolute path after rewriting)
+  expect(parsed.imports["/components/Button"]).toBeDefined();
+  expect(parsed.imports["/components/Button"]).toMatch(/^blob:mock-url-/);
 });
 
 test("createImportMap handles @/ alias imports", () => {
@@ -238,8 +238,7 @@ test("integration: full transformation pipeline works", () => {
   expect(parsed.imports["/App.jsx"]).toMatch(/^blob:mock-url-/);
   expect(parsed.imports["/Button.jsx"]).toMatch(/^blob:mock-url-/);
 
-  // Import variations should exist
-  expect(parsed.imports["./Button"]).toBeDefined();
+  // Import variations should exist (relative imports rewritten to absolute before processing)
   expect(parsed.imports["/Button"]).toBeDefined();
 
   // Create preview HTML
@@ -319,7 +318,7 @@ test("createImportMap handles missing CSS files gracefully", () => {
   // Should not throw error
   expect(result.styles).toBeDefined();
   // Could include comment about missing file
-  expect(result.styles).toContain("/* ./missing.css not found */");
+  expect(result.styles).toContain("/* /missing.css not found */");
 });
 
 test("createImportMap resolves CSS import paths correctly", () => {
@@ -481,12 +480,11 @@ test("files with syntax errors are not included in import map", () => {
   const result = createImportMap(files);
   const parsed = JSON.parse(result.importMap);
   
-  // BadComponent should NOT be in import map anymore
+  // BadComponent.jsx with extension should NOT be in import map (transform failed)
   expect(parsed.imports["/BadComponent.jsx"]).toBeUndefined();
-  expect(parsed.imports["/BadComponent"]).toBeUndefined();
-  
-  // But a placeholder should be created for the import
-  expect(parsed.imports["./BadComponent"]).toBeDefined();
+
+  // But a placeholder should be created for the import (absolute path after rewriting)
+  expect(parsed.imports["/BadComponent"]).toBeDefined();
   
   // Should have error tracked
   expect(result.errors.some(e => e.path === "/BadComponent.jsx")).toBe(true);

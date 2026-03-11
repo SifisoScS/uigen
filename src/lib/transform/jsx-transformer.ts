@@ -132,8 +132,19 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
       path.endsWith(".ts") ||
       path.endsWith(".tsx")
     ) {
+      // Rewrite relative imports (./Foo, ../Foo) to absolute paths so they
+      // resolve correctly against the import map (blob: URLs aren't hierarchical).
+      const fileDir = path.substring(0, path.lastIndexOf("/"));
+      const absoluteContent = content.replace(
+        /\b(from|import)\s+(['"])(\.\.?\/[^'"]+)\2/g,
+        (_, keyword, quote, importPath) => {
+          const resolved = resolveRelativePath(fileDir, importPath);
+          return `${keyword} ${quote}${resolved}${quote}`;
+        }
+      );
+
       const { code, error, missingImports, cssImports } = transformJSX(
-        content,
+        absoluteContent,
         path,
         existingFiles
       );
@@ -260,7 +271,7 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
     ];
 
     for (const variant of variations) {
-      if (imports[variant] || files.has(variant)) {
+      if (imports[variant] || transformedFiles.has(variant)) {
         found = true;
         break;
       }
