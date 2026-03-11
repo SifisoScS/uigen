@@ -139,7 +139,11 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
         /\b(from|import)\s+(['"])(\.\.?\/[^'"]+)\2/g,
         (_, keyword, quote, importPath) => {
           const resolved = resolveRelativePath(fileDir, importPath);
-          return `${keyword} ${quote}${resolved}${quote}`;
+          // Use @/ prefix so the specifier is treated as a bare specifier
+          // in the import map rather than an absolute URL path (which would
+          // resolve against the server origin instead of the import map
+          // when modules are loaded from blob: URLs).
+          return `${keyword} ${quote}@${resolved}${quote}`;
         }
       );
 

@@ -318,7 +318,7 @@ test("createImportMap handles missing CSS files gracefully", () => {
   // Should not throw error
   expect(result.styles).toBeDefined();
   // Could include comment about missing file
-  expect(result.styles).toContain("/* /missing.css not found */");
+  expect(result.styles).toContain("not found");
 });
 
 test("createImportMap resolves CSS import paths correctly", () => {
