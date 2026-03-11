@@ -169,6 +169,7 @@ describe("POST /api/chat", () => {
         id: "proj-123",
         name: "Test",
         userId: "user-abc",
+        public: false,
         messages: "[]",
         data: "{}",
         createdAt: new Date(),
