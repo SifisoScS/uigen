@@ -271,7 +271,7 @@ export function createImportMap(files: Map<string, string>): ImportMapResult {
     ];
 
     for (const variant of variations) {
-      if (imports[variant] || files.has(variant)) {
+      if (imports[variant] || transformedFiles.has(variant)) {
         found = true;
         break;
       }
