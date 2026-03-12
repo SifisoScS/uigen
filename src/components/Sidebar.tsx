@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, LogOut, LogIn, Sparkles,
-  PanelLeftClose, PanelLeftOpen, History, Layers, Network, Shield,
+  PanelLeftClose, PanelLeftOpen, History, Layers, Network, Shield, Package,
 } from "lucide-react";
 import { GovernanceLog } from "@/components/GovernanceLog";
 import { AuthDialog } from "@/components/auth/AuthDialog";
@@ -225,6 +225,17 @@ export function Sidebar({ user, projectId }: SidebarProps) {
             )}
           </div>
         )}
+      </div>
+
+      {/* Registry link */}
+      <div className="flex-shrink-0 px-3 pb-2">
+        <button
+          onClick={() => router.push("/registry")}
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-neutral-600 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
+        >
+          <Package className="h-3.5 w-3.5" />
+          Registry
+        </button>
       </div>
 
       {/* Auth footer */}

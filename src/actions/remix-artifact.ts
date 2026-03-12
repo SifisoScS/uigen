@@ -12,15 +12,24 @@ export async function remixArtifact(artifactId: string) {
   });
   if (!artifact) throw new Error("Artifact not found");
 
-  const project = await prisma.project.create({
-    data: {
-      name: `${artifact.name} (remix)`,
-      userId: session?.userId ?? null,
-      messages: "[]",
-      data: artifact.filesData,
-      public: false,
-    },
-  });
+  const [project] = await prisma.$transaction([
+    prisma.project.create({
+      data: {
+        name: `${artifact.name} (remix)`,
+        userId: session?.userId ?? null,
+        messages: "[]",
+        data: artifact.filesData,
+        public: false,
+      },
+    }),
+    prisma.publicArtifact.update({
+      where: { id: artifactId },
+      data: {
+        remixCount: { increment: 1 },
+        lastRemixedAt: new Date(),
+      },
+    }),
+  ]);
 
   return { projectId: project.id };
 }
