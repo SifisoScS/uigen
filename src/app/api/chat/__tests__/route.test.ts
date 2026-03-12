@@ -14,6 +14,19 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    projectSnapshot: {
+      findFirst: vi.fn().mockResolvedValue(null), // no snapshot → no branch → no policy check
+      create: vi.fn().mockResolvedValue({ id: "snap-1" }),
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    branchPolicy: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ policyType: "OPEN" }),
+    },
+    governanceEvent: {
+      create: vi.fn().mockResolvedValue({ id: "evt-1" }),
+    },
   },
 }));
 

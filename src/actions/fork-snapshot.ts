@@ -2,6 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { enforceBranchPolicy } from "@/lib/governance/enforce";
 
 export async function forkSnapshot(snapshotId: string) {
   const session = await getSession();
@@ -16,6 +17,15 @@ export async function forkSnapshot(snapshotId: string) {
     !snapshot.project.userId ||
     (!!session && snapshot.project.userId === session.userId);
   if (!isOwner && !snapshot.project.public) throw new Error("Unauthorized");
+
+  if (snapshot.branchName) {
+    await enforceBranchPolicy({
+      projectId: snapshot.projectId,
+      branchName: snapshot.branchName,
+      actorType: "HUMAN",
+      actionType: "FORK",
+    });
+  }
 
   const date = new Date(snapshot.createdAt).toLocaleDateString("en-US", {
     month: "short",

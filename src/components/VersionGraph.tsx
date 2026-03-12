@@ -91,6 +91,26 @@ function displayName(snap: Snapshot): string {
   return snap.name?.trim() || snap.label;
 }
 
+type PolicyType = "OPEN" | "AI_ONLY" | "HUMAN_ONLY" | "LOCKED";
+
+function clientPolicyType(branchName: string | null | undefined): PolicyType {
+  if (!branchName) return "OPEN";
+  if (branchName.startsWith("protected/")) return "AI_ONLY";
+  if (branchName.startsWith("release/")) return "HUMAN_ONLY";
+  return "OPEN";
+}
+
+const POLICY_CONFIG: Record<Exclude<PolicyType, "OPEN">, { label: string; className: string }> = {
+  AI_ONLY:     { label: "AI Only",     className: "text-violet-400 bg-violet-500/10" },
+  HUMAN_ONLY:  { label: "Human Only",  className: "text-sky-400 bg-sky-500/10" },
+  LOCKED:      { label: "Locked",      className: "text-red-400 bg-red-500/10" },
+};
+
+function isMutationBlocked(branchName: string | null | undefined): boolean {
+  const pt = clientPolicyType(branchName);
+  return pt !== "OPEN";
+}
+
 function extractFiles(data: string): Map<string, string> {
   try {
     const nodes = JSON.parse(data) as Record<string, FileNode>;
@@ -554,8 +574,8 @@ export function VersionGraph({ projectId, generationCount, onClose }: VersionGra
       const { projectId: pid } = await restoreSnapshot(snapshotId);
       toast.success("Restored to checkpoint — reloading…");
       window.location.href = `/${pid}`;
-    } catch {
-      toast.error("Restore failed. Please try again.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed. Please try again.");
     }
   }, [pendingRestore]);
 
@@ -566,8 +586,8 @@ export function VersionGraph({ projectId, generationCount, onClose }: VersionGra
       const forked = await forkSnapshot(snap.id);
       toast.success("Forked from checkpoint!");
       router.push(`/${forked.id}`);
-    } catch {
-      toast.error("Fork failed. Please try again.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Fork failed. Please try again.");
     } finally {
       setPendingFork(null);
     }
@@ -872,17 +892,29 @@ export function VersionGraph({ projectId, generationCount, onClose }: VersionGra
                           </div>
                         </div>
 
-                        {/* Branch pill */}
+                        {/* Branch pill + policy badge */}
                         {snap.branchName && (
-                          <span
-                            className="self-start text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                            style={{
-                              color: branchColor(snap.branchName),
-                              background: branchColorBg(snap.branchName),
-                            }}
-                          >
-                            {snap.branchName}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                              style={{
+                                color: branchColor(snap.branchName),
+                                background: branchColorBg(snap.branchName),
+                              }}
+                            >
+                              {snap.branchName}
+                            </span>
+                            {(() => {
+                              const pt = clientPolicyType(snap.branchName);
+                              if (pt === "OPEN") return null;
+                              const cfg = POLICY_CONFIG[pt];
+                              return (
+                                <span className={`text-[8px] px-1 py-0.5 rounded font-medium ${cfg.className}`}>
+                                  {cfg.label}
+                                </span>
+                              );
+                            })()}
+                          </div>
                         )}
 
                         {/* Tags */}
@@ -951,11 +983,15 @@ export function VersionGraph({ projectId, generationCount, onClose }: VersionGra
                         >
                           <button
                             className={cn(
-                              "w-full text-left text-[11px] px-2.5 py-1.5 rounded-md flex items-center gap-2 transition-colors",
+                              "w-full text-left text-[11px] px-2.5 py-1.5 rounded-md flex items-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                               pendingRestore === snap.id
                                 ? "text-red-400 bg-red-950/30 hover:bg-red-950/50"
                                 : "text-neutral-400 hover:text-neutral-200 hover:bg-[#222]"
                             )}
+                            disabled={isMutationBlocked(snap.branchName)}
+                            title={isMutationBlocked(snap.branchName)
+                              ? `Blocked by ${clientPolicyType(snap.branchName)} policy`
+                              : undefined}
                             onClick={() => handleRestore(snap.id)}
                           >
                             <RotateCcw className="h-3 w-3 flex-shrink-0" />
@@ -964,8 +1000,11 @@ export function VersionGraph({ projectId, generationCount, onClose }: VersionGra
                               : "Restore to this"}
                           </button>
                           <button
-                            className="w-full text-left text-[11px] text-neutral-400 hover:text-neutral-200 hover:bg-[#222] px-2.5 py-1.5 rounded-md flex items-center gap-2 transition-colors disabled:opacity-50"
-                            disabled={pendingFork === snap.id}
+                            className="w-full text-left text-[11px] text-neutral-400 hover:text-neutral-200 hover:bg-[#222] px-2.5 py-1.5 rounded-md flex items-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={pendingFork === snap.id || isMutationBlocked(snap.branchName)}
+                            title={isMutationBlocked(snap.branchName)
+                              ? `Blocked by ${clientPolicyType(snap.branchName)} policy`
+                              : undefined}
                             onClick={() => handleFork(snap)}
                           >
                             <GitFork className="h-3 w-3 flex-shrink-0" />

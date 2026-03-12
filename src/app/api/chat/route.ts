@@ -10,6 +10,7 @@ import { getSession } from "@/lib/auth";
 import { getLanguageModel } from "@/lib/provider";
 import { getGenerationPrompt } from "@/lib/prompts/generation";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import { enforceBranchPolicy } from "@/lib/governance/enforce";
 import { NextRequest, NextResponse } from "next/server";
 
 interface ChatRequest {
@@ -89,6 +90,28 @@ export async function POST(req: NextRequest) {
     });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    // Governance: check AI is allowed to write on the project's current branch
+    const latestSnap = await prisma.projectSnapshot.findFirst({
+      where: { projectId },
+      orderBy: { createdAt: "desc" },
+      select: { branchName: true },
+    });
+    if (latestSnap?.branchName) {
+      try {
+        await enforceBranchPolicy({
+          projectId,
+          branchName: latestSnap.branchName,
+          actorType: "AI",
+          actionType: "WRITE",
+        });
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : "Policy violation" },
+          { status: 403 }
+        );
+      }
     }
   }
 

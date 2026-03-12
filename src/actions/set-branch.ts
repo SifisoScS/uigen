@@ -2,6 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { registerBranchPolicy } from "@/lib/governance/enforce";
 
 /**
  * Create or clear a branch name, propagating to affected snapshots:
@@ -32,6 +33,9 @@ export async function setBranch(snapshotId: string, branchName: string | null) {
   const { projectId, createdAt, branchName: oldBranch } = snapshot;
 
   if (branchName !== null) {
+    // Register governance policy on first use (no-op if already registered)
+    await registerBranchPolicy(projectId, branchName, "HUMAN");
+
     // Set this snapshot and propagate to subsequent snapshots with no branch
     await prisma.$transaction([
       prisma.projectSnapshot.update({

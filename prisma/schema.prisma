@@ -60,3 +60,28 @@ model ProjectSnapshot {
 
   @@index([projectId])
 }
+
+model BranchPolicy {
+  id         String   @id @default(cuid())
+  projectId  String
+  branchName String
+  policyType String   // "OPEN" | "AI_ONLY" | "HUMAN_ONLY" | "LOCKED" — runtime validated
+  rules      Json?    // future: { requireApproval: true, allowedTools: [...] }
+  createdBy  String?  // userId or "claude"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([projectId, branchName])
+  @@index([projectId])
+}
+
+model GovernanceEvent {
+  id        String   @id @default(cuid())
+  projectId String
+  type      String   // "BRANCH_POLICY_SET" | "BRANCH_POLICY_CHANGED" | "ARTIFACT_PUBLISHED" | "RELEASE_TAG_CREATED"
+  actor     String?  // userId or "claude"
+  details   Json?
+  timestamp DateTime @default(now())
+
+  @@index([projectId, timestamp])
+}

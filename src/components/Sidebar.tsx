@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, LogOut, LogIn, Sparkles,
-  PanelLeftClose, PanelLeftOpen, History, Layers, Network,
+  PanelLeftClose, PanelLeftOpen, History, Layers, Network, Shield,
 } from "lucide-react";
+import { GovernanceLog } from "@/components/GovernanceLog";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { SnapshotTimeline } from "@/components/SnapshotTimeline";
 import { VersionGraph } from "@/components/VersionGraph";
@@ -27,7 +28,7 @@ interface Project {
   updatedAt: Date;
 }
 
-type SidebarView = "projects" | "history";
+type SidebarView = "projects" | "history" | "governance";
 
 export function Sidebar({ user, projectId }: SidebarProps) {
   const router = useRouter();
@@ -143,13 +144,34 @@ export function Sidebar({ user, projectId }: SidebarProps) {
               <History className="h-3 w-3" />
               History
             </button>
+            <button
+              onClick={() => setView("governance")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-1 rounded text-[11px] font-medium transition-colors",
+                view === "governance"
+                  ? "bg-[#2a2a2a] text-neutral-200"
+                  : "text-neutral-600 hover:text-neutral-400"
+              )}
+              title="Governance log"
+            >
+              <Shield className="h-3 w-3" />
+            </button>
           </div>
         </div>
       )}
 
       {/* Content area */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {view === "history" && canShowHistory ? (
+        {view === "governance" && canShowHistory && projectId ? (
+          <>
+            <div className="px-3 mb-1 flex-shrink-0">
+              <p className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">
+                Governance Log
+              </p>
+            </div>
+            <GovernanceLog projectId={projectId} />
+          </>
+        ) : view === "history" && canShowHistory ? (
           <>
             <div className="px-3 mb-1 flex-shrink-0 flex items-center justify-between">
               <p className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">

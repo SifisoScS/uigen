@@ -17,6 +17,21 @@ import { useFileSystem } from "@/lib/contexts/file-system-context";
 import { SnapshotDiffModal } from "@/components/SnapshotDiffModal";
 import { cn } from "@/lib/utils";
 
+type PolicyType = "OPEN" | "AI_ONLY" | "HUMAN_ONLY" | "LOCKED";
+
+function clientPolicyType(branchName: string | null | undefined): PolicyType {
+  if (!branchName) return "OPEN";
+  if (branchName.startsWith("protected/")) return "AI_ONLY";
+  if (branchName.startsWith("release/")) return "HUMAN_ONLY";
+  return "OPEN";
+}
+
+const POLICY_CONFIG: Record<Exclude<PolicyType, "OPEN">, { label: string; color: string; bg: string }> = {
+  AI_ONLY:    { label: "AI Only",    color: "text-violet-400", bg: "bg-violet-500/10" },
+  HUMAN_ONLY: { label: "Human Only", color: "text-sky-400",    bg: "bg-sky-500/10"    },
+  LOCKED:     { label: "Locked",     color: "text-red-400",    bg: "bg-red-500/10"    },
+};
+
 interface Snapshot {
   id: string;
   label: string;
@@ -117,8 +132,8 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
       const { projectId: pid } = await restoreSnapshot(snapshotId);
       toast.success("Restored to checkpoint — reloading…");
       window.location.href = `/${pid}`;
-    } catch {
-      toast.error("Restore failed. Please try again.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed. Please try again.");
     }
   }
 
@@ -129,8 +144,8 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
       patchSnapshot(snap.id, { forkCount: snap.forkCount + 1 });
       toast.success("Forked from checkpoint!");
       router.push(`/${forked.id}`);
-    } catch {
-      toast.error("Fork failed. Please try again.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Fork failed. Please try again.");
     } finally {
       setPendingFork(null);
     }
@@ -245,6 +260,11 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
             const isRenamingThis = renamingId === snap.id;
             const isTaggingThis = tagInputId === snap.id;
             const prevSnap = getPrevSnapshot(snap);
+            const snapPolicy = clientPolicyType(snap.branchName);
+            const mutationBlocked = snapPolicy !== "OPEN";
+            const policyBlockReason = mutationBlocked
+              ? `Blocked by ${snapPolicy} policy on branch "${snap.branchName}"`
+              : undefined;
 
             return (
               <div
@@ -297,20 +317,29 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
                   )}
                 </div>
 
-                {/* Branch pill */}
-                {snap.branchName && (
-                  <div className="mb-0.5">
-                    <span
-                      className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
-                      style={{
-                        color: branchColor(snap.branchName),
-                        background: branchColorBg(snap.branchName),
-                      }}
-                    >
-                      {snap.branchName}
-                    </span>
-                  </div>
-                )}
+                {/* Branch pill + policy badge */}
+                {snap.branchName && (() => {
+                  const pt = clientPolicyType(snap.branchName);
+                  const policyCfg = pt !== "OPEN" ? POLICY_CONFIG[pt] : null;
+                  return (
+                    <div className="flex items-center gap-1 mb-0.5 flex-wrap">
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                        style={{
+                          color: branchColor(snap.branchName),
+                          background: branchColorBg(snap.branchName),
+                        }}
+                      >
+                        {snap.branchName}
+                      </span>
+                      {policyCfg && (
+                        <span className={`text-[8px] px-1 py-0.5 rounded font-medium ${policyCfg.color} ${policyCfg.bg}`}>
+                          {policyCfg.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Time + fork badge */}
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -370,13 +399,14 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
                 <div className="flex items-center gap-1 flex-wrap opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleRestore(snap.id)}
+                    disabled={mutationBlocked}
                     className={cn(
-                      "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                      "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                       isRestoringThis
                         ? "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
                         : "bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e]"
                     )}
-                    title={isRestoringThis ? "Click again to confirm" : "Restore to this checkpoint"}
+                    title={policyBlockReason ?? (isRestoringThis ? "Click again to confirm" : "Restore to this checkpoint")}
                   >
                     <RotateCcw className="h-2.5 w-2.5" />
                     {isRestoringThis ? "Confirm?" : "Restore"}
@@ -384,9 +414,9 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
 
                   <button
                     onClick={() => handleFork(snap)}
-                    disabled={isForkingThis}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors disabled:opacity-50"
-                    title="Fork project from this checkpoint"
+                    disabled={isForkingThis || mutationBlocked}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={policyBlockReason ?? "Fork project from this checkpoint"}
                   >
                     {isForkingThis ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <GitFork className="h-2.5 w-2.5" />}
                     Fork
