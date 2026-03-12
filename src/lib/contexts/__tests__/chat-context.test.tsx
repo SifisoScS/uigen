@@ -108,6 +108,7 @@ describe("ChatContext", () => {
         projectId: "test-project",
       },
       onToolCall: expect.any(Function),
+      onFinish: expect.any(Function),
     });
 
     expect(screen.getByTestId("messages").textContent).toBe("2");

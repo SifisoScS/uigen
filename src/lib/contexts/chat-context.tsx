@@ -6,6 +6,7 @@ import {
   ReactNode,
   useEffect,
   useCallback,
+  useState,
 } from "react";
 import { useChat as useAIChat } from "@ai-sdk/react";
 import { Message } from "ai";
@@ -25,6 +26,8 @@ interface ChatContextType {
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   status: string;
+  /** Increments each time a generation stream fully completes */
+  generationCount: number;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -35,6 +38,7 @@ export function ChatProvider({
   initialMessages = [],
 }: ChatContextProps & { children: ReactNode }) {
   const { fileSystem, handleToolCall, getAllFiles } = useFileSystem();
+  const [generationCount, setGenerationCount] = useState(0);
 
   const {
     messages,
@@ -53,6 +57,9 @@ export function ChatProvider({
     },
     onToolCall: ({ toolCall }) => {
       handleToolCall(toolCall);
+    },
+    onFinish: () => {
+      setGenerationCount((c) => c + 1);
     },
   });
 
@@ -92,6 +99,7 @@ export function ChatProvider({
         handleInputChange,
         handleSubmit,
         status,
+        generationCount,
       }}
     >
       {children}
