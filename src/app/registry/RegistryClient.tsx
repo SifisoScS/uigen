@@ -31,6 +31,8 @@ export interface ArtifactItem {
   policyType: string | null;
   authorId: string | null;
   createdAt: string;
+  parentArtifactId: string | null;
+  parentArtifactName: string | null;
 }
 
 interface RegistryClientProps {
@@ -106,6 +108,27 @@ function ArtifactCard({ item }: { item: ArtifactItem }) {
               {item.description}
             </p>
           )}
+
+          {/* Ancestry provenance */}
+          {item.parentArtifactId && item.parentArtifactName ? (
+            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-neutral-600">
+              <GitFork className="h-2.5 w-2.5 flex-shrink-0" />
+              Remixed from{" "}
+              <Link
+                href={`/share/${item.parentArtifactId}`}
+                className="text-blue-500 hover:text-blue-400 truncate max-w-[120px]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {item.parentArtifactName}
+              </Link>
+            </p>
+          ) : item.remixCount > 0 ? (
+            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-neutral-600">
+              <GitFork className="h-2.5 w-2.5 flex-shrink-0" />
+              Remixed into {item.remixCount} artifact
+              {item.remixCount !== 1 ? "s" : ""}
+            </p>
+          ) : null}
         </div>
 
         {/* Tags */}

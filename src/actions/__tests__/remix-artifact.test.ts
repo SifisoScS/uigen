@@ -74,6 +74,17 @@ describe("remixArtifact", () => {
     expect(callArgs).toHaveLength(2);
   });
 
+  it("sets remixedFromArtifactId on the new project for lineage tracking", async () => {
+    await remixArtifact("art-1");
+
+    // project.create should be called with remixedFromArtifactId = the source artifact id
+    expect(prisma.project.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ remixedFromArtifactId: "art-1" }),
+      })
+    );
+  });
+
   it("works for anonymous users (no session)", async () => {
     vi.mocked(getSession).mockResolvedValue(null);
 

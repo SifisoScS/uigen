@@ -186,6 +186,7 @@ describe("POST /api/chat", () => {
         messages: "[]",
         data: "{}",
         forkedFromSnapshotId: null,
+        remixedFromArtifactId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

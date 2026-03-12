@@ -87,12 +87,15 @@ export async function publishArtifact({
   // 4. Ownership check
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { userId: true, data: true },
+    select: { userId: true, data: true, remixedFromArtifactId: true },
   });
   if (!project) throw new Error("Project not found");
   if (project.userId && project.userId !== session.userId) {
     throw new Error("Unauthorized");
   }
+
+  // Propagate parent lineage when this project was remixed from an artifact
+  const parentArtifactId = project.remixedFromArtifactId ?? null;
 
   // 5. Compute hashes
   const filesHash = computeFilesHash(project.data);
@@ -107,7 +110,7 @@ export async function publishArtifact({
     branchName,
     releasedAt: new Date().toISOString(),
     releasedBy: session.userId,
-    parentArtifactId: null,
+    parentArtifactId,
     governancePolicy: {
       policyType: policy.policyType,
       policyHash,
@@ -129,6 +132,7 @@ export async function publishArtifact({
       filesData: project.data,
       previewImage: previewImage ?? null,
       authorId: session.userId,
+      parentArtifactId,
     },
   });
 

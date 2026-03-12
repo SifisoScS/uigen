@@ -20,6 +20,7 @@ export async function remixArtifact(artifactId: string) {
         messages: "[]",
         data: artifact.filesData,
         public: false,
+        remixedFromArtifactId: artifactId,
       },
     }),
     prisma.publicArtifact.update({

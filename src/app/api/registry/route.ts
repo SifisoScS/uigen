@@ -22,9 +22,7 @@ export async function GET(req: NextRequest) {
       ? { remixCount: "desc" as const }
       : { createdAt: "desc" as const };
 
-  // Build where clause — SQLite doesn't support full-text search so we
-  // apply search filtering in memory after fetching a generous window.
-  // For the MVP scale (hundreds of artifacts) this is fine.
+  // Fetch all artifacts (in-memory filter for SQLite MVP)
   const rows = await prisma.publicArtifact.findMany({
     orderBy,
     select: {
@@ -37,6 +35,7 @@ export async function GET(req: NextRequest) {
       manifest: true,
       createdAt: true,
       authorId: true,
+      parentArtifactId: true,
     },
   });
 
@@ -59,6 +58,19 @@ export async function GET(req: NextRequest) {
   const total = filtered.length;
   const page = filtered.slice(offset, offset + PAGE_SIZE);
 
+  // Batch-fetch parent names for any artifacts that have a parentArtifactId
+  const parentIds = [
+    ...new Set(page.map((r) => r.parentArtifactId).filter(Boolean) as string[]),
+  ];
+  const parentMap = new Map<string, string>();
+  if (parentIds.length > 0) {
+    const parents = await prisma.publicArtifact.findMany({
+      where: { id: { in: parentIds } },
+      select: { id: true, name: true },
+    });
+    for (const p of parents) parentMap.set(p.id, p.name);
+  }
+
   const items = page.map((r) => {
     const manifest = r.manifest as Record<string, unknown>;
     return {
@@ -71,11 +83,15 @@ export async function GET(req: NextRequest) {
       tags: Array.isArray(manifest?.registryTags)
         ? (manifest.registryTags as string[])
         : [],
-      policyType: (
-        manifest?.governancePolicy as Record<string, unknown> | undefined
-      )?.policyType ?? null,
+      policyType:
+        (manifest?.governancePolicy as Record<string, unknown> | undefined)
+          ?.policyType ?? null,
       authorId: r.authorId ?? null,
       createdAt: r.createdAt.toISOString(),
+      parentArtifactId: r.parentArtifactId ?? null,
+      parentArtifactName: r.parentArtifactId
+        ? (parentMap.get(r.parentArtifactId) ?? null)
+        : null,
     };
   });
 

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { Package, Tag, GitBranch, Calendar, User } from "lucide-react";
 import { RemixButton } from "./RemixButton";
 import { ManifestViewer } from "./ManifestViewer";
+import { AncestryChain } from "@/components/AncestryChain";
+import { getArtifactLineage } from "@/actions/get-artifact-lineage";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,10 @@ export default async function SharePage({
 
   if (!artifact) notFound();
 
-  const manifest = artifact.manifest as Record<string, unknown>;
+  const [manifest, lineage] = await Promise.all([
+    Promise.resolve(artifact.manifest as Record<string, unknown>),
+    getArtifactLineage(artifactId).catch(() => ({ parent: null, children: [] as never[] })),
+  ]);
   const tags = Array.isArray(manifest.registryTags)
     ? (manifest.registryTags as string[])
     : [];
@@ -134,6 +139,9 @@ export default async function SharePage({
 
         {/* Manifest viewer */}
         <ManifestViewer manifest={artifact.manifest} />
+
+        {/* Ancestry chain */}
+        <AncestryChain parent={lineage.parent} remixedInto={lineage.children} />
 
         {/* Remix CTA */}
         <div className="rounded-xl border border-[#2a2a2a] bg-[#111111] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

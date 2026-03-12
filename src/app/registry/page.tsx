@@ -40,10 +40,24 @@ async function fetchRegistryPage(): Promise<{
         manifest: true,
         createdAt: true,
         authorId: true,
+        parentArtifactId: true,
       },
     });
 
     const total = await prisma.publicArtifact.count();
+
+    // Batch-fetch parent names
+    const parentIds = [
+      ...new Set(rows.map((r) => r.parentArtifactId).filter(Boolean) as string[]),
+    ];
+    const parentMap = new Map<string, string>();
+    if (parentIds.length > 0) {
+      const parents = await prisma.publicArtifact.findMany({
+        where: { id: { in: parentIds } },
+        select: { id: true, name: true },
+      });
+      for (const p of parents) parentMap.set(p.id, p.name);
+    }
 
     const items: ArtifactItem[] = rows.map((r) => {
       const manifest = r.manifest as Record<string, unknown>;
@@ -62,6 +76,10 @@ async function fetchRegistryPage(): Promise<{
             ?.policyType as string) ?? null,
         authorId: r.authorId ?? null,
         createdAt: r.createdAt.toISOString(),
+        parentArtifactId: r.parentArtifactId ?? null,
+        parentArtifactName: r.parentArtifactId
+          ? (parentMap.get(r.parentArtifactId) ?? null)
+          : null,
       };
     });
 
