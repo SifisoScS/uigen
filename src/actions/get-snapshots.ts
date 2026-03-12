@@ -15,7 +15,7 @@ export async function getSnapshots(projectId: string) {
 
   const rows = await prisma.projectSnapshot.findMany({
     where: { projectId },
-    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ pinned: "desc" }, { isVersionTag: "desc" }, { createdAt: "desc" }],
     take: 50,
     select: {
       id: true,
@@ -23,6 +23,9 @@ export async function getSnapshots(projectId: string) {
       name: true,
       tags: true,
       pinned: true,
+      branchName: true,
+      isVersionTag: true,
+      mergedFromSnapshotId: true,
       createdAt: true,
       _count: { select: { forks: true } },
     },
@@ -34,6 +37,9 @@ export async function getSnapshots(projectId: string) {
     name: r.name,
     tags: JSON.parse(r.tags) as string[],
     pinned: r.pinned,
+    branchName: r.branchName,
+    isVersionTag: r.isVersionTag,
+    mergedFromSnapshotId: r.mergedFromSnapshotId,
     forkCount: r._count.forks,
     createdAt: r.createdAt,
   }));
