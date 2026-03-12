@@ -95,11 +95,14 @@ model PublicArtifact {
   description  String?
   manifest     Json
   filesData    String   // serialized project data (JSON) — enables remix
-  previewImage String?  // base64-encoded PNG or external URL
-  authorId     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  previewImage  String?  // base64-encoded PNG or external URL
+  authorId      String?
+  remixCount    Int      @default(0)
+  lastRemixedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([remixCount])
 }
