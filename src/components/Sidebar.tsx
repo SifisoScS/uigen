@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, LogOut, LogIn, Sparkles,
-  PanelLeftClose, PanelLeftOpen, History, Layers,
+  PanelLeftClose, PanelLeftOpen, History, Layers, Network,
 } from "lucide-react";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { SnapshotTimeline } from "@/components/SnapshotTimeline";
+import { VersionGraph } from "@/components/VersionGraph";
 import { signOut } from "@/actions";
 import { getProjects } from "@/actions/get-projects";
 import { createProject } from "@/actions/create-project";
@@ -36,6 +37,7 @@ export function Sidebar({ user, projectId }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [graphOpen, setGraphOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -149,10 +151,17 @@ export function Sidebar({ user, projectId }: SidebarProps) {
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {view === "history" && canShowHistory ? (
           <>
-            <div className="px-3 mb-1 flex-shrink-0">
+            <div className="px-3 mb-1 flex-shrink-0 flex items-center justify-between">
               <p className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">
                 Checkpoints
               </p>
+              <button
+                onClick={() => setGraphOpen(true)}
+                className="p-1 rounded text-neutral-700 hover:text-neutral-400 hover:bg-[#1e1e1e] transition-colors"
+                title="Version Graph"
+              >
+                <Network className="h-3.5 w-3.5" />
+              </button>
             </div>
             <SnapshotTimeline
               projectId={projectId}
@@ -239,6 +248,14 @@ export function Sidebar({ user, projectId }: SidebarProps) {
         onOpenChange={setAuthDialogOpen}
         defaultMode={authMode}
       />
+
+      {graphOpen && projectId && (
+        <VersionGraph
+          projectId={projectId}
+          generationCount={generationCount}
+          onClose={() => setGraphOpen(false)}
+        />
+      )}
     </div>
   );
 }
