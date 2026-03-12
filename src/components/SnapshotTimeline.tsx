@@ -2,18 +2,27 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { History, RotateCcw, GitFork, Loader2, RefreshCw } from "lucide-react";
+import { History, RotateCcw, GitFork, Loader2, RefreshCw, GitCompare } from "lucide-react";
 import { toast } from "sonner";
 import { getSnapshots } from "@/actions/get-snapshots";
 import { restoreSnapshot } from "@/actions/restore-snapshot";
 import { forkSnapshot } from "@/actions/fork-snapshot";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useFileSystem } from "@/lib/contexts/file-system-context";
+import { SnapshotDiffModal } from "@/components/SnapshotDiffModal";
 import { cn } from "@/lib/utils";
 
 interface Snapshot {
   id: string;
   label: string;
   createdAt: Date;
+}
+
+interface DiffSpec {
+  beforeId: string;
+  beforeLabel: string;
+  afterTarget: "current" | string;
+  afterLabel: string;
 }
 
 interface SnapshotTimelineProps {
@@ -37,10 +46,12 @@ function relativeTime(date: Date): string {
 
 export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelineProps) {
   const router = useRouter();
+  const { getAllFiles } = useFileSystem();
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingRestore, setPendingRestore] = useState<string | null>(null);
   const [pendingFork, setPendingFork] = useState<string | null>(null);
+  const [diffSpec, setDiffSpec] = useState<DiffSpec | null>(null);
 
   const fetchSnapshots = useCallback(async () => {
     try {
@@ -110,63 +121,114 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
   }
 
   return (
-    <ScrollArea className="flex-1 min-h-0">
-      <div className="px-2 py-1 space-y-0.5">
-        {snapshots.map((snap) => {
-          const isRestoringThis = pendingRestore === snap.id;
-          const isForkingThis = pendingFork === snap.id;
+    <>
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="px-2 py-1 space-y-0.5">
+          {snapshots.map((snap, index) => {
+            const isRestoringThis = pendingRestore === snap.id;
+            const isForkingThis = pendingFork === snap.id;
+            // The snapshot one step older (index+1 is older because list is newest-first)
+            const olderSnap = snapshots[index + 1] ?? null;
 
-          return (
-            <div
-              key={snap.id}
-              className="group rounded-md px-2 py-2 hover:bg-[#1a1a1a] transition-colors"
-            >
-              {/* Label + time */}
-              <p
-                className="text-[11px] text-neutral-300 truncate leading-tight mb-1"
-                title={snap.label}
+            return (
+              <div
+                key={snap.id}
+                className="group rounded-md px-2 py-2 hover:bg-[#1a1a1a] transition-colors"
               >
-                {snap.label}
-              </p>
-              <p className="text-[10px] text-neutral-600 mb-1.5">
-                {relativeTime(snap.createdAt)}
-              </p>
-
-              {/* Actions — visible on hover */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleRestore(snap.id)}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-                    isRestoringThis
-                      ? "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
-                      : "bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e]"
-                  )}
-                  title={isRestoringThis ? "Click again to confirm restore" : "Restore to this checkpoint"}
+                {/* Label + time */}
+                <p
+                  className="text-[11px] text-neutral-300 truncate leading-tight mb-1"
+                  title={snap.label}
                 >
-                  <RotateCcw className="h-2.5 w-2.5" />
-                  {isRestoringThis ? "Confirm?" : "Restore"}
-                </button>
+                  {snap.label}
+                </p>
+                <p className="text-[10px] text-neutral-600 mb-1.5">
+                  {relativeTime(snap.createdAt)}
+                </p>
 
-                <button
-                  onClick={() => handleFork(snap.id)}
-                  disabled={isForkingThis}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors disabled:opacity-50"
-                  title="Fork project from this checkpoint"
-                >
-                  {isForkingThis ? (
-                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                  ) : (
-                    <GitFork className="h-2.5 w-2.5" />
+                {/* Actions — visible on hover */}
+                <div className="flex items-center gap-1 flex-wrap opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleRestore(snap.id)}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                      isRestoringThis
+                        ? "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
+                        : "bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e]"
+                    )}
+                    title={isRestoringThis ? "Click again to confirm restore" : "Restore to this checkpoint"}
+                  >
+                    <RotateCcw className="h-2.5 w-2.5" />
+                    {isRestoringThis ? "Confirm?" : "Restore"}
+                  </button>
+
+                  <button
+                    onClick={() => handleFork(snap.id)}
+                    disabled={isForkingThis}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors disabled:opacity-50"
+                    title="Fork project from this checkpoint"
+                  >
+                    {isForkingThis ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <GitFork className="h-2.5 w-2.5" />
+                    )}
+                    Fork
+                  </button>
+
+                  {/* Diff vs. current */}
+                  <button
+                    onClick={() =>
+                      setDiffSpec({
+                        beforeId: snap.id,
+                        beforeLabel: snap.label,
+                        afterTarget: "current",
+                        afterLabel: "Current",
+                      })
+                    }
+                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors"
+                    title="Compare this checkpoint to the current state"
+                  >
+                    <GitCompare className="h-2.5 w-2.5" />
+                    vs. now
+                  </button>
+
+                  {/* Diff vs. previous checkpoint */}
+                  {olderSnap && (
+                    <button
+                      onClick={() =>
+                        setDiffSpec({
+                          beforeId: olderSnap.id,
+                          beforeLabel: olderSnap.label,
+                          afterTarget: snap.id,
+                          afterLabel: snap.label,
+                        })
+                      }
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors"
+                      title="Compare this checkpoint to the previous one"
+                    >
+                      <GitCompare className="h-2.5 w-2.5" />
+                      vs. prev
+                    </button>
                   )}
-                  Fork
-                </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </ScrollArea>
+            );
+          })}
+        </div>
+      </ScrollArea>
+
+      {diffSpec && (
+        <SnapshotDiffModal
+          beforeId={diffSpec.beforeId}
+          beforeLabel={diffSpec.beforeLabel}
+          afterTarget={diffSpec.afterTarget}
+          afterLabel={diffSpec.afterLabel}
+          currentFiles={getAllFiles()}
+          onClose={() => setDiffSpec(null)}
+        />
+      )}
+    </>
   );
 }
 
