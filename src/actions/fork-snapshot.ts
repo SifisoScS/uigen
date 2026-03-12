@@ -29,6 +29,7 @@ export async function forkSnapshot(snapshotId: string) {
       messages: snapshot.messages,
       data: snapshot.data,
       public: false,
+      forkedFromSnapshotId: snapshotId,
     },
   });
 

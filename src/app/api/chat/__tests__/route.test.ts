@@ -172,6 +172,7 @@ describe("POST /api/chat", () => {
         public: false,
         messages: "[]",
         data: "{}",
+        forkedFromSnapshotId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
