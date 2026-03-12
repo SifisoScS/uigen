@@ -40,18 +40,23 @@ model Project {
 }
 
 model ProjectSnapshot {
-  id        String   @id @default(cuid())
-  projectId String
-  label     String
-  name      String?
-  tags      String   @default("[]")
-  pinned    Boolean  @default(false)
-  messages  String   @default("[]")
-  data      String   @default("{}")
-  createdAt DateTime @default(now())
+  id                   String   @id @default(cuid())
+  projectId            String
+  label                String
+  name                 String?
+  tags                 String   @default("[]")
+  pinned               Boolean  @default(false)
+  branchName           String?
+  isVersionTag         Boolean  @default(false)
+  mergedFromSnapshotId String?
+  messages             String   @default("[]")
+  data                 String   @default("{}")
+  createdAt            DateTime @default(now())
 
-  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  forks   Project[] @relation("ForkSource")
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  forks        Project[]          @relation("ForkSource")
+  mergedFrom   ProjectSnapshot?   @relation("MergeSource", fields: [mergedFromSnapshotId], references: [id], onDelete: SetNull)
+  mergedInto   ProjectSnapshot[]  @relation("MergeSource")
 
   @@index([projectId])
 }

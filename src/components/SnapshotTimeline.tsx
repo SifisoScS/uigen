@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   History, RotateCcw, GitFork, Loader2, RefreshCw,
-  GitCompare, Pin, PinOff, GitBranch, X, Plus,
+  GitCompare, Pin, PinOff, GitBranch, X, Plus, Tag, GitMerge,
 } from "lucide-react";
+import { branchColor, branchColorBg } from "@/lib/branch-colors";
 import { toast } from "sonner";
 import { getSnapshots } from "@/actions/get-snapshots";
 import { restoreSnapshot } from "@/actions/restore-snapshot";
@@ -23,6 +24,9 @@ interface Snapshot {
   tags: string[];
   pinned: boolean;
   forkCount: number;
+  branchName: string | null;
+  isVersionTag: boolean;
+  mergedFromSnapshotId: string | null;
   createdAt: Date;
 }
 
@@ -100,6 +104,7 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
       const updated = prev.map((s) => (s.id === id ? { ...s, ...patch } : s));
       return [...updated].sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (a.isVersionTag !== b.isVersionTag) return a.isVersionTag ? -1 : 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
     });
@@ -246,7 +251,9 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
                 key={snap.id}
                 className={cn(
                   "group rounded-md px-2 py-2 transition-colors",
-                  snap.pinned
+                  snap.isVersionTag
+                    ? "bg-amber-950/20 hover:bg-amber-950/30 border border-amber-900/30"
+                    : snap.pinned
                     ? "bg-[#161616] hover:bg-[#1c1c1c] border border-[#232323]"
                     : "hover:bg-[#1a1a1a]"
                 )}
@@ -255,6 +262,16 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
                 <div className="flex items-start gap-1 mb-0.5">
                   {snap.pinned && (
                     <Pin className="h-2.5 w-2.5 text-amber-500 flex-shrink-0 mt-0.5" />
+                  )}
+                  {snap.isVersionTag && (
+                    <span title="Version tag">
+                      <Tag className="h-2.5 w-2.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                    </span>
+                  )}
+                  {snap.mergedFromSnapshotId && (
+                    <span title="Has merge source">
+                      <GitMerge className="h-2.5 w-2.5 text-purple-400 flex-shrink-0 mt-0.5" />
+                    </span>
                   )}
                   {isRenamingThis ? (
                     <input
@@ -279,6 +296,21 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
                     </p>
                   )}
                 </div>
+
+                {/* Branch pill */}
+                {snap.branchName && (
+                  <div className="mb-0.5">
+                    <span
+                      className="text-[9px] px-1.5 py-0.5 rounded-full font-medium"
+                      style={{
+                        color: branchColor(snap.branchName),
+                        background: branchColorBg(snap.branchName),
+                      }}
+                    >
+                      {snap.branchName}
+                    </span>
+                  </div>
+                )}
 
                 {/* Time + fork badge */}
                 <div className="flex items-center gap-1.5 mb-1.5">

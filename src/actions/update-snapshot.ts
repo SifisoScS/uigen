@@ -9,6 +9,9 @@ interface UpdateSnapshotInput {
   name?: string | null;
   tags?: string[];
   pinned?: boolean;
+  branchName?: string | null;
+  isVersionTag?: boolean;
+  mergedFromSnapshotId?: string | null;
 }
 
 export async function updateSnapshot(input: UpdateSnapshotInput) {
@@ -35,6 +38,9 @@ export async function updateSnapshot(input: UpdateSnapshotInput) {
   if (input.name !== undefined) data.name = input.name?.trim() || null;
   if (input.tags !== undefined) data.tags = JSON.stringify(input.tags);
   if (input.pinned !== undefined) data.pinned = input.pinned;
+  if (input.branchName !== undefined) data.branchName = input.branchName?.trim() || null;
+  if (input.isVersionTag !== undefined) data.isVersionTag = input.isVersionTag;
+  if (input.mergedFromSnapshotId !== undefined) data.mergedFromSnapshotId = input.mergedFromSnapshotId;
 
   return prisma.projectSnapshot.update({
     where: { id: input.snapshotId },
