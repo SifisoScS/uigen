@@ -1102,7 +1102,7 @@ export function VersionGraph({ projectId, generationCount, onClose }: VersionGra
                   }
                 >
                   <GitBranch className="h-3 w-3 flex-shrink-0" style={{ color: branchColor(snap.branchName) }} />
-                  Rename "{snap.branchName}"
+                  Rename &ldquo;{snap.branchName}&rdquo;
                 </button>
                 <button
                   className="w-full text-left text-[11px] text-neutral-400 hover:text-neutral-200 hover:bg-[#222] px-2.5 py-1.5 rounded-md flex items-center gap-2 transition-colors"
