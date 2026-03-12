@@ -16,6 +16,7 @@ import { PreviewFrame } from "@/components/preview/PreviewFrame";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExportButton } from "@/components/ExportButton";
 import { ShareButton } from "@/components/ShareButton";
+import { PublishButton } from "@/components/PublishButton";
 import { Sidebar } from "@/components/Sidebar";
 import { WelcomeFullScreen } from "@/components/onboarding/WelcomeFullScreen";
 import { useChat } from "@/lib/contexts/chat-context";
@@ -220,6 +221,9 @@ function AppShell({ user, project }: MainContentProps) {
                 </Tabs>
 
                 <div className="flex items-center gap-2">
+                  {project?.id && (
+                    <PublishButton projectId={project.id} />
+                  )}
                   {project?.id && (
                     <ShareButton
                       projectId={project.id}

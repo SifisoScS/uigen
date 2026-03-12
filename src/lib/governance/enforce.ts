@@ -50,8 +50,12 @@ export async function enforceBranchPolicy({
     });
   }
 
-  // Hard invariant: release/* branches are immutable except via explicit merge
-  if (branchName.startsWith("release/") && actionType !== "MERGE") {
+  // Hard invariant: release/* branches are immutable except via merge or publish
+  if (
+    branchName.startsWith("release/") &&
+    actionType !== "MERGE" &&
+    actionType !== "PUBLISH"
+  ) {
     throw new Error(
       `Direct mutations to release/* branches are forbidden. Only merges from protected branches are allowed.`
     );

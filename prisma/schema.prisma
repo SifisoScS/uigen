@@ -85,3 +85,21 @@ model GovernanceEvent {
 
   @@index([projectId, timestamp])
 }
+
+model PublicArtifact {
+  id           String   @id @default(cuid())
+  projectId    String
+  branchName   String
+  version      String
+  name         String
+  description  String?
+  manifest     Json
+  filesData    String   // serialized project data (JSON) — enables remix
+  previewImage String?  // base64-encoded PNG or external URL
+  authorId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdAt])
+}
