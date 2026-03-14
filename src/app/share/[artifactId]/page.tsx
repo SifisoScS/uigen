@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Package, Tag, GitBranch, Calendar, User } from "lucide-react";
+import { Package, Tag, GitBranch, Calendar, User, GitFork } from "lucide-react";
 import { RemixButton } from "./RemixButton";
 import { ManifestViewer } from "./ManifestViewer";
 import { AncestryChain } from "@/components/AncestryChain";
@@ -142,6 +143,15 @@ export default async function SharePage({
 
         {/* Ancestry chain */}
         <AncestryChain parent={lineage.parent} remixedInto={lineage.children} />
+
+        {/* Full lineage graph link */}
+        <Link
+          href={`/lineage/${artifact.id}`}
+          className="flex items-center gap-2 text-xs text-neutral-500 hover:text-neutral-300 transition-colors group w-fit"
+        >
+          <GitFork className="h-3.5 w-3.5 group-hover:text-blue-400 transition-colors" />
+          View full lineage graph
+        </Link>
 
         {/* Remix CTA */}
         <div className="rounded-xl border border-[#2a2a2a] bg-[#111111] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Tag,
   ShieldCheck,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,20 +160,32 @@ function ArtifactCard({ item }: { item: ArtifactItem }) {
               {item.remixCount}
             </span>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-6 px-2 text-[10px] gap-1 border-[#2a2a2a] text-neutral-400 hover:text-neutral-200 hover:bg-[#1a1a1a]"
-            onClick={handleRemix}
-            disabled={remixing}
-          >
-            {remixing ? (
-              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-            ) : (
-              <GitFork className="h-2.5 w-2.5" />
-            )}
-            Remix
-          </Button>
+          <div className="flex items-center gap-1">
+            <Link
+              href={`/lineage/${item.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-0.5 h-6 px-2 text-[10px] rounded border border-[#2a2a2a] text-neutral-500 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
+              title="View lineage graph"
+              aria-label={`View lineage for ${item.name}`}
+            >
+              <Network className="h-2.5 w-2.5" />
+              Lineage
+            </Link>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-[10px] gap-1 border-[#2a2a2a] text-neutral-400 hover:text-neutral-200 hover:bg-[#1a1a1a]"
+              onClick={handleRemix}
+              disabled={remixing}
+            >
+              {remixing ? (
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              ) : (
+                <GitFork className="h-2.5 w-2.5" />
+              )}
+              Remix
+            </Button>
+          </div>
         </div>
       </div>
     </div>
