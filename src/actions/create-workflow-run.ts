@@ -33,7 +33,7 @@ export async function createWorkflowRun(
       name: trimmed,
       description: input.description ?? null,
       workflowId: input.workflowId ?? null,
-      inputData: input.inputData ?? null,
+      inputData: (input.inputData ?? undefined) as object | undefined,
       outputSummary: input.outputSummary ?? null,
     },
     select: {
