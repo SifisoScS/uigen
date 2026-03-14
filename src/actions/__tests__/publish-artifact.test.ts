@@ -21,6 +21,12 @@ vi.mock("@/lib/prisma", () => ({
     governanceEvent: {
       create: vi.fn(),
     },
+    workflowRun: {
+      findUnique: vi.fn(),
+    },
+    artifactRelation: {
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -87,14 +93,26 @@ const ARTIFACT = {
   updatedAt: new Date(),
 };
 
+const WORKFLOW_RUN = {
+  id: "wf-run-1",
+  name: "Generate AuthForm",
+  description: null,
+  outputSummary: "Generated AuthForm with dark mode",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getSession).mockResolvedValue(SESSION);
+  vi.mocked(enforceBranchPolicy).mockResolvedValue(undefined);
   vi.mocked(prisma.branchPolicy.findUnique).mockResolvedValue(HUMAN_ONLY_POLICY as never);
   vi.mocked(prisma.project.findUnique).mockResolvedValue(PROJECT as never);
   vi.mocked(prisma.publicArtifact.create).mockResolvedValue(ARTIFACT as never);
   vi.mocked(prisma.publicArtifact.update).mockResolvedValue(ARTIFACT as never);
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
+  vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(WORKFLOW_RUN as never);
+  vi.mocked(prisma.artifactRelation.create).mockResolvedValue({ id: "rel-1" } as never);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -183,5 +201,73 @@ describe("publishArtifact", () => {
     await expect(
       publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "Test" })
     ).rejects.toThrow(/LOCKED/);
+  });
+});
+
+describe("publishArtifact — WorkflowRun linkage", () => {
+  it("creates ArtifactRelation when workflowRunId is provided", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+      workflowRunId: "wf-run-1",
+    });
+
+    expect(prisma.artifactRelation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          parentType: "WorkflowRun",
+          parentId: "wf-run-1",
+          childType: "PublicArtifact",
+          childId: "art-1",
+          relationType: "GENERATED_BY",
+        }),
+      })
+    );
+  });
+
+  it("logs ARTIFACT_RELATION_CREATED governance event when workflowRunId is provided", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+      workflowRunId: "wf-run-1",
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "ARTIFACT_RELATION_CREATED",
+          details: expect.objectContaining({
+            parentType: "WorkflowRun",
+            parentId: "wf-run-1",
+            relationType: "GENERATED_BY",
+          }),
+        }),
+      })
+    );
+  });
+
+  it("throws when workflowRunId does not exist", async () => {
+    vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(null);
+
+    await expect(
+      publishArtifact({
+        projectId: "proj-1",
+        branchName: "release/v1.0",
+        name: "My Component",
+        workflowRunId: "nonexistent-run",
+      })
+    ).rejects.toThrow(/WorkflowRun not found/);
+  });
+
+  it("does NOT create ArtifactRelation when workflowRunId is omitted", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+    });
+
+    expect(prisma.artifactRelation.create).not.toHaveBeenCalled();
   });
 });

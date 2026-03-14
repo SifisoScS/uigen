@@ -10,6 +10,12 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    artifactRelation: {
+      findMany: vi.fn(),
+    },
+    workflowRun: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -51,6 +57,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Default: findMany returns empty array
   vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+  vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -229,5 +236,69 @@ describe("getArtifactLineageDeep", () => {
 
     // Should not throw — depth is silently clamped
     await expect(getArtifactLineageDeep("x", 999)).resolves.toBeDefined();
+  });
+
+  it("returns empty crossParents when no ArtifactRelation rows exist", async () => {
+    const raw = makeDeepRaw("art");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art");
+
+    expect(result.crossParents).toEqual([]);
+  });
+
+  it("populates crossParents from WorkflowRun ArtifactRelation rows", async () => {
+    const raw = makeDeepRaw("art-linked");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([
+      {
+        id: "rel-1",
+        parentType: "WorkflowRun",
+        parentId: "wf-99",
+        childType: "PublicArtifact",
+        childId: "art-linked",
+        relationType: "GENERATED_BY",
+        createdAt: new Date("2026-01-01"),
+      },
+    ] as never);
+    vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue({
+      id: "wf-99",
+      name: "Generate AuthForm",
+      outputSummary: "Generated AuthForm with dark mode",
+      createdAt: new Date("2026-01-01"),
+    } as never);
+
+    const result = await getArtifactLineageDeep("art-linked");
+
+    expect(result.crossParents).toHaveLength(1);
+    expect(result.crossParents[0].id).toBe("wf-99");
+    expect(result.crossParents[0].parentName).toBe("Generate AuthForm");
+    expect(result.crossParents[0].relationType).toBe("GENERATED_BY");
+    expect(result.crossParents[0].parentType).toBe("WorkflowRun");
+  });
+
+  it("skips ArtifactRelation rows where WorkflowRun is not found", async () => {
+    const raw = makeDeepRaw("art-missing-wf");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([
+      {
+        id: "rel-orphan",
+        parentType: "WorkflowRun",
+        parentId: "wf-deleted",
+        childType: "PublicArtifact",
+        childId: "art-missing-wf",
+        relationType: "GENERATED_BY",
+        createdAt: new Date("2026-01-01"),
+      },
+    ] as never);
+    vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(null);
+
+    const result = await getArtifactLineageDeep("art-missing-wf");
+
+    expect(result.crossParents).toEqual([]);
   });
 });
