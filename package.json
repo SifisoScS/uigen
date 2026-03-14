@@ -11,7 +11,8 @@
     "test": "vitest",
     "setup": "npm install && npx prisma generate && npx prisma migrate dev",
     "db:reset": "npx prisma migrate reset --force",
-    "db:seed": "npx tsx --env-file=.env.local scripts/seed-artifacts.ts"
+    "db:seed": "npx tsx --env-file=.env.local scripts/seed-artifacts.ts",
+    "db:export-zips": "npx tsx --env-file=.env.local scripts/export-seed-zips.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "1.2.12",
