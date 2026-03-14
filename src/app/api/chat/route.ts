@@ -80,17 +80,19 @@ export async function POST(req: NextRequest) {
   const { messages, files, projectId } = body;
 
   // Ownership check: if projectId is provided the user must own it
+  let projectName: string | undefined;
   if (projectId) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const project = await prisma.project.findUnique({
       where: { id: projectId, userId: session.userId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
+    projectName = project.name;
 
     // Governance: check AI is allowed to write on the project's current branch
     const latestSnap = await prisma.projectSnapshot.findFirst({
@@ -160,12 +162,34 @@ export async function POST(req: NextRequest) {
       const serializedMessages = JSON.stringify(allMessages);
       const serializedData = JSON.stringify(fileSystem.serialize());
 
+      // Auto-name: rename generic "Design #xxxxx" on the first user message
+      const isGenericName = /^(New )?Design #\d+$/i.test(projectName ?? "");
+      const isFirstMessage = messages.filter((m) => m.role === "user").length === 1;
+      let autoName: string | undefined;
+      if (isGenericName && isFirstMessage) {
+        const raw: unknown = messages.find((m) => m.role === "user")?.content;
+        let text = "";
+        if (typeof raw === "string") {
+          text = raw.trim();
+        } else if (Array.isArray(raw)) {
+          const part = (raw as Array<{ type: string; text?: string }>).find(
+            (c) => c.type === "text"
+          );
+          if (part?.text) text = part.text.trim();
+        }
+        if (text.length >= 4) {
+          const truncated = text.length > 48 ? text.slice(0, 48).trimEnd() + "…" : text;
+          autoName = truncated.charAt(0).toUpperCase() + truncated.slice(1);
+        }
+      }
+
       try {
         await prisma.project.update({
           where: { id: projectId, userId: session.userId },
           data: {
             messages: serializedMessages,
             data: serializedData,
+            ...(autoName ? { name: autoName } : {}),
           },
         });
       } catch (error) {

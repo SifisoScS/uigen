@@ -84,6 +84,16 @@ export interface ArtifactNode {
   parentArtifactId: string | null;
 }
 
+/** A non-UI parent linked via ArtifactRelation (e.g. the WorkflowRun that generated this artifact). */
+export interface CrossParentNode {
+  id: string;
+  parentType: string;    // "WorkflowRun" | future types
+  parentName: string;
+  outputSummary: string | null;
+  relationType: string;  // "GENERATED_BY" | future types
+  createdAt: Date;
+}
+
 export interface ArtifactLineageDeep {
   /** The artifact being viewed. */
   current: ArtifactNode;
@@ -93,6 +103,8 @@ export interface ArtifactLineageDeep {
   children: ArtifactNode[];
   /** True when the ancestor chain was truncated by the depth limit. */
   depthReached: boolean;
+  /** Cross-artifact parents (WorkflowRuns etc.) linked via ArtifactRelation. */
+  crossParents: CrossParentNode[];
 }
 
 type RawDeep = {
@@ -182,10 +194,37 @@ export async function getArtifactLineageDeep(
     select: DEEP_SELECT,
   });
 
+  // 4. Fetch cross-artifact parents via ArtifactRelation (e.g. WorkflowRun)
+  const relations = await prisma.artifactRelation.findMany({
+    where: { childType: "PublicArtifact", childId: artifactId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const crossParents: CrossParentNode[] = [];
+  for (const rel of relations) {
+    if (rel.parentType === "WorkflowRun") {
+      const wr = await prisma.workflowRun.findUnique({
+        where: { id: rel.parentId },
+        select: { id: true, name: true, outputSummary: true, createdAt: true },
+      });
+      if (wr) {
+        crossParents.push({
+          id: wr.id,
+          parentType: "WorkflowRun",
+          parentName: wr.name,
+          outputSummary: wr.outputSummary,
+          relationType: rel.relationType,
+          createdAt: wr.createdAt,
+        });
+      }
+    }
+  }
+
   return {
     current,
     parents,
     children: childrenRaw.map(toNode),
     depthReached,
+    crossParents,
   };
 }

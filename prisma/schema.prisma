@@ -87,6 +87,34 @@ model GovernanceEvent {
   @@index([projectId, timestamp])
 }
 
+model WorkflowRun {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  workflowId    String?  // future foreign key to a Workflow model
+  inputData     Json?    // { prompt, model, ... }
+  outputSummary String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Generic cross-artifact relation table.
+// Uses string parentType/childType for polymorphism — no DB-level FK constraint
+// (Prisma doesn't support polymorphic relations natively).
+model ArtifactRelation {
+  id           String   @id @default(cuid())
+  parentType   String   // "WorkflowRun" | "DatasetSnapshot" | "AgentInvocation" …
+  parentId     String   // ID in the table identified by parentType
+  childType    String   // "PublicArtifact" | "Project" …
+  childId      String   // ID in the table identified by childType
+  relationType String   // "GENERATED_BY" | "INFORMED_BY" | "USED_IN" …
+  createdAt    DateTime @default(now())
+
+  @@unique([parentType, parentId, childType, childId])
+  @@index([childType, childId])
+  @@index([parentType, parentId])
+}
+
 model PublicArtifact {
   id           String   @id @default(cuid())
   projectId    String

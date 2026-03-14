@@ -18,7 +18,7 @@ vi.mock("@/actions/get-artifact-lineage", () => ({
 
 const { getArtifactLineageDeep } = await import("@/actions/get-artifact-lineage");
 const { LineageGraph } = await import("../LineageGraph");
-import type { ArtifactLineageDeep, ArtifactNode } from "@/actions/get-artifact-lineage";
+import type { ArtifactLineageDeep, ArtifactNode, CrossParentNode } from "@/actions/get-artifact-lineage";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,12 +36,24 @@ function makeNode(id: string, name = `Artifact ${id}`): ArtifactNode {
   };
 }
 
+function makeCrossParent(id: string, name = `Workflow ${id}`): CrossParentNode {
+  return {
+    id,
+    parentType: "WorkflowRun",
+    parentName: name,
+    outputSummary: null,
+    relationType: "GENERATED_BY",
+    createdAt: new Date("2026-01-01"),
+  };
+}
+
 function makeData(
   currentId: string,
   opts: {
     parents?: ArtifactNode[];
     children?: ArtifactNode[];
     depthReached?: boolean;
+    crossParents?: CrossParentNode[];
   } = {}
 ): ArtifactLineageDeep {
   return {
@@ -49,6 +61,7 @@ function makeData(
     parents: opts.parents ?? [],
     children: opts.children ?? [],
     depthReached: opts.depthReached ?? false,
+    crossParents: opts.crossParents ?? [],
   };
 }
 
@@ -188,5 +201,35 @@ describe("LineageGraph", () => {
     render(<LineageGraph initialData={makeData("a")} currentId="a" />);
 
     expect(screen.getByRole("button", { name: /fit to view/i })).toBeDefined();
+  });
+
+  it("renders a WorkflowRun node when crossParents contains a WorkflowRun", () => {
+    const data = makeData("cur", {
+      crossParents: [makeCrossParent("wf-1", "Generate AuthForm")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    expect(screen.getByTestId("workflow-node-wf-1")).toBeDefined();
+  });
+
+  it("clicking a WorkflowRun node navigates to /workflow-run/[id]", async () => {
+    const user = userEvent.setup();
+    const data = makeData("cur", {
+      crossParents: [makeCrossParent("wf-42", "Gen Something")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    await user.click(screen.getByTestId("workflow-node-wf-42"));
+
+    expect(mockPush).toHaveBeenCalledWith("/workflow-run/wf-42");
+  });
+
+  it("does NOT render workflow nodes when crossParents is empty", () => {
+    const data = makeData("cur", { crossParents: [] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    // No element with the workflow-node- prefix should be present
+    const canvas = screen.getByTestId("graph-canvas");
+    expect(canvas.querySelector("[data-testid^='workflow-node-']")).toBeNull();
   });
 });

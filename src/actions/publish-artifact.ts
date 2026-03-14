@@ -49,6 +49,7 @@ export async function publishArtifact({
   version = "1.0.0",
   tags = [],
   previewImage = null,
+  workflowRunId = null,
 }: {
   projectId: string;
   branchName: string;
@@ -57,6 +58,7 @@ export async function publishArtifact({
   version?: string;
   tags?: string[];
   previewImage?: string | null;
+  workflowRunId?: string | null;
 }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
@@ -151,6 +153,39 @@ export async function publishArtifact({
       details: { artifactId: artifact.id, version, branchName, name },
     },
   });
+
+  // 10. Cross-artifact relation (optional WorkflowRun linkage)
+  if (workflowRunId) {
+    const run = await prisma.workflowRun.findUnique({
+      where: { id: workflowRunId },
+      select: { id: true },
+    });
+    if (!run) throw new Error(`WorkflowRun not found: ${workflowRunId}`);
+
+    await prisma.artifactRelation.create({
+      data: {
+        parentType: "WorkflowRun",
+        parentId: workflowRunId,
+        childType: "PublicArtifact",
+        childId: artifact.id,
+        relationType: "GENERATED_BY",
+      },
+    });
+
+    await prisma.governanceEvent.create({
+      data: {
+        projectId,
+        type: "ARTIFACT_RELATION_CREATED",
+        actor: session.userId,
+        details: {
+          parentType: "WorkflowRun",
+          parentId: workflowRunId,
+          childId: artifact.id,
+          relationType: "GENERATED_BY",
+        },
+      },
+    });
+  }
 
   return { artifactId: artifact.id };
 }

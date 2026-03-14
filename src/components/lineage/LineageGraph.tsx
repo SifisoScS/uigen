@@ -7,6 +7,7 @@ import {
   getArtifactLineageDeep,
   type ArtifactLineageDeep,
   type ArtifactNode,
+  type CrossParentNode,
 } from "@/actions/get-artifact-lineage";
 
 // ── Layout constants ──────────────────────────────────────────────────────────
@@ -24,16 +25,23 @@ interface LayoutNode extends ArtifactNode {
   y: number;
 }
 
+interface WorkflowLayoutNode extends CrossParentNode {
+  x: number;
+  y: number;
+}
+
 interface Edge {
   fromX: number;
   fromY: number;
   toX: number;
   toY: number;
   key: string;
+  dashed?: boolean;
 }
 
 interface Layout {
   nodes: LayoutNode[];
+  workflowNodes: WorkflowLayoutNode[];
   edges: Edge[];
   canvasW: number;
   canvasH: number;
@@ -53,23 +61,33 @@ export interface LineageGraphProps {
 // ── Layout computation ────────────────────────────────────────────────────────
 
 function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
-  const { parents, current, children } = data;
+  const { parents, current, children, crossParents } = data;
 
   const childCount = children.length;
-  const childRowW =
-    childCount > 0 ? childCount * NODE_W + (childCount - 1) * H_GAP : 0;
-  const canvasW = Math.max(NODE_W + PADDING * 2, childRowW + PADDING * 2);
+  const wfCount = crossParents.length;
+  const childRowW = childCount > 0 ? childCount * NODE_W + (childCount - 1) * H_GAP : 0;
+  const wfRowW    = wfCount    > 0 ? wfCount    * NODE_W + (wfCount    - 1) * H_GAP : 0;
+  const canvasW = Math.max(NODE_W + PADDING * 2, childRowW + PADDING * 2, wfRowW + PADDING * 2);
   const centerX = canvasW / 2;
 
-  // Ancestors: stacked top→bottom, oldest at top
+  // WorkflowRun row sits at the very top, offset from PADDING
+  const wfOffset = wfCount > 0 ? NODE_H + V_GAP : 0;
+  const wfStartX = centerX - wfRowW / 2;
+  const workflowNodes: WorkflowLayoutNode[] = crossParents.map((cp, i) => ({
+    ...cp,
+    x: wfStartX + i * (NODE_W + H_GAP),
+    y: PADDING,
+  }));
+
+  // Ancestors: stacked below workflow row
   const parentNodes: LayoutNode[] = parents.map((p, i) => ({
     ...p,
     x: centerX - NODE_W / 2,
-    y: PADDING + i * (NODE_H + V_GAP),
+    y: PADDING + wfOffset + i * (NODE_H + V_GAP),
   }));
 
   // Current node
-  const currentY = PADDING + parents.length * (NODE_H + V_GAP);
+  const currentY = PADDING + wfOffset + parents.length * (NODE_H + V_GAP);
   const currentNode: LayoutNode = {
     ...current,
     x: centerX - NODE_W / 2,
@@ -85,10 +103,9 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
     y: childY,
   }));
 
-  const canvasH =
-    childY + (childCount > 0 ? NODE_H : 0) + PADDING;
+  const canvasH = childY + (childCount > 0 ? NODE_H : 0) + PADDING;
 
-  // Edges
+  // Edges: parent chain
   const edges: Edge[] = [];
   const chain = [...parentNodes, currentNode];
   for (let i = 0; i < chain.length - 1; i++) {
@@ -102,6 +119,7 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
       key: `${from.id}->${to.id}`,
     });
   }
+  // Edges: children
   for (const child of childNodes) {
     edges.push({
       fromX: currentNode.x + NODE_W / 2,
@@ -111,9 +129,21 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
       key: `${currentId}->${child.id}`,
     });
   }
+  // Edges: WorkflowRun → current (dashed — orthogonal to remix lineage)
+  for (const wf of workflowNodes) {
+    edges.push({
+      fromX: wf.x + NODE_W / 2,
+      fromY: wf.y + NODE_H,
+      toX: currentNode.x + NODE_W / 2,
+      toY: currentNode.y,
+      key: `wf-${wf.id}->${currentId}`,
+      dashed: true,
+    });
+  }
 
   return {
     nodes: [...parentNodes, currentNode, ...childNodes],
+    workflowNodes,
     edges,
     canvasW,
     canvasH,
@@ -408,14 +438,47 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                 y1={edge.fromY}
                 x2={edge.toX}
                 y2={edge.toY - 5}
-                stroke="#2a2a2a"
+                stroke={edge.dashed ? "#4a3a1a" : "#2a2a2a"}
                 strokeWidth={1.5}
+                strokeDasharray={edge.dashed ? "5 3" : undefined}
                 markerEnd="url(#lg-arrow)"
               />
             ))}
           </svg>
 
-          {/* Node cards */}
+          {/* WorkflowRun node cards */}
+          {layout.workflowNodes.map((wf) => (
+            <div
+              key={`wf-${wf.id}`}
+              data-node
+              data-testid={`workflow-node-${wf.id}`}
+              style={{
+                position: "absolute",
+                left: wf.x,
+                top: wf.y,
+                width: NODE_W,
+                height: NODE_H,
+              }}
+              className="rounded-lg border border-dashed border-amber-800/60 bg-[#111111] px-3 py-2 flex flex-col justify-between select-none cursor-pointer hover:border-amber-600/60 transition-colors"
+              onClick={() => router.push(`/workflow-run/${wf.id}`)}
+              role="button"
+              aria-label={`View WorkflowRun: ${wf.parentName}`}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <span className="text-[10px] font-medium text-amber-400/80 leading-tight line-clamp-2 flex-1 min-w-0">
+                  {wf.parentName}
+                </span>
+                <span className="flex-shrink-0 text-[8px] font-medium text-amber-700 bg-amber-950/60 border border-amber-800/40 rounded px-1 py-0.5 leading-none ml-1 mt-0.5">
+                  RUN
+                </span>
+              </div>
+              <span className="text-[8px] text-amber-800 font-medium mt-1">
+                {wf.relationType}
+              </span>
+            </div>
+          ))}
+
+          {/* Artifact node cards */}
           {layout.nodes.map((node) => {
             const isCurrent = node.id === currentId;
             const colors = policyColors(node.policyType);
