@@ -16,12 +16,35 @@ vi.mock("@/lib/prisma", () => ({
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { prisma } = await import("@/lib/prisma");
-const { getArtifactLineage } = await import("../get-artifact-lineage");
+const { getArtifactLineage, getArtifactLineageDeep } = await import(
+  "../get-artifact-lineage"
+);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeSummary(id: string, name = `Artifact ${id}`, version = "1.0.0") {
   return { id, name, version, authorId: null, createdAt: new Date("2026-01-01") };
+}
+
+/**
+ * Makes a full raw artifact suitable for getArtifactLineageDeep mocks.
+ * parentArtifactId defaults to null (no parent).
+ */
+function makeDeepRaw(
+  id: string,
+  opts: { name?: string; version?: string; parentArtifactId?: string | null } = {}
+) {
+  return {
+    id,
+    name: opts.name ?? `Artifact ${id}`,
+    version: opts.version ?? "1.0.0",
+    description: null,
+    authorId: null,
+    createdAt: new Date("2026-01-01"),
+    remixCount: 0,
+    parentArtifactId: opts.parentArtifactId ?? null,
+    manifest: { governancePolicy: { policyType: "HUMAN_ONLY" } },
+  };
 }
 
 beforeEach(() => {
@@ -101,5 +124,110 @@ describe("getArtifactLineage", () => {
     expect(result.parent?.id).toBe("parent-x");
     expect(result.children).toHaveLength(1);
     expect(result.children[0].id).toBe("child-y");
+  });
+});
+
+// ── getArtifactLineageDeep ────────────────────────────────────────────────────
+
+describe("getArtifactLineageDeep", () => {
+  it("throws when the artifact does not exist", async () => {
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(null);
+
+    await expect(getArtifactLineageDeep("missing")).rejects.toThrow(
+      /artifact not found/i
+    );
+  });
+
+  it("returns only current when no parents and no children", async () => {
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(
+      makeDeepRaw("solo") as never
+    );
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("solo");
+
+    expect(result.current.id).toBe("solo");
+    expect(result.parents).toHaveLength(0);
+    expect(result.children).toHaveLength(0);
+    expect(result.depthReached).toBe(false);
+  });
+
+  it("walks parent chain up to the requested depth (depth=2)", async () => {
+    // Chain: grandparent → parent → current
+    const grandparent = makeDeepRaw("gp", { parentArtifactId: null });
+    const parent = makeDeepRaw("p1", { parentArtifactId: "gp" });
+    const current = makeDeepRaw("cur", { parentArtifactId: "p1" });
+
+    vi.mocked(prisma.publicArtifact.findUnique)
+      .mockResolvedValueOnce(current as never)   // fetch current
+      .mockResolvedValueOnce(parent as never)    // depth level 0 → direct parent
+      .mockResolvedValueOnce(grandparent as never); // depth level 1 → grandparent
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("cur", 2);
+
+    // parents should be oldest-first: [grandparent, parent]
+    expect(result.parents).toHaveLength(2);
+    expect(result.parents[0].id).toBe("gp");
+    expect(result.parents[1].id).toBe("p1");
+    expect(result.depthReached).toBe(false); // grandparent has no further parent
+  });
+
+  it("sets depthReached=true when chain is deeper than requested depth", async () => {
+    // Chain: great-grandparent → grandparent → parent → current, but depth=1
+    const parent = makeDeepRaw("p", { parentArtifactId: "gp" }); // parent still has a parent
+    const current = makeDeepRaw("c", { parentArtifactId: "p" });
+
+    vi.mocked(prisma.publicArtifact.findUnique)
+      .mockResolvedValueOnce(current as never) // fetch current
+      .mockResolvedValueOnce(parent as never); // depth level 0
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("c", 1);
+
+    expect(result.parents).toHaveLength(1);
+    expect(result.parents[0].id).toBe("p");
+    expect(result.depthReached).toBe(true);
+  });
+
+  it("detects cycles and stops walking without infinite loop", async () => {
+    // Cycle: A's parent is B, B's parent is A
+    const nodeA = makeDeepRaw("A", { parentArtifactId: "B" });
+    const nodeB = makeDeepRaw("B", { parentArtifactId: "A" }); // cycle back to A
+
+    vi.mocked(prisma.publicArtifact.findUnique)
+      .mockResolvedValueOnce(nodeA as never) // fetch current (A)
+      .mockResolvedValueOnce(nodeB as never); // fetch B — then A is visited, stops
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+
+    // Should resolve without hanging, cycle broken after fetching B
+    const result = await getArtifactLineageDeep("A", 7);
+
+    expect(result.parents).toHaveLength(1);
+    expect(result.parents[0].id).toBe("B");
+    expect(result.depthReached).toBe(false); // stopped due to cycle, not depth
+  });
+
+  it("extracts policyType from manifest governancePolicy", async () => {
+    const raw = makeDeepRaw("art", { parentArtifactId: null });
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(
+      raw as never
+    );
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art");
+
+    expect(result.current.policyType).toBe("HUMAN_ONLY");
+  });
+
+  it("clamps depth to max 7", async () => {
+    const raw = makeDeepRaw("x", { parentArtifactId: null });
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(
+      raw as never
+    );
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+
+    // Should not throw — depth is silently clamped
+    await expect(getArtifactLineageDeep("x", 999)).resolves.toBeDefined();
   });
 });

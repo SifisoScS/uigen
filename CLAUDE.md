@@ -1,6 +1,6 @@
-# CLAUDE.md — UIGen Codebase Guide
+# CLAUDE.md
 
-This file provides guidance for AI assistants (Claude and others) working in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ---
 
@@ -13,6 +13,8 @@ Key capabilities:
 - In-browser JSX compilation and live component preview
 - Virtual (in-memory) file system — no disk I/O for generated code
 - Optional persistence via SQLite (authenticated users only)
+- Snapshot/branching system with governance policies
+- Public artifact registry with remix/fork lineage tracking
 
 ---
 
@@ -29,50 +31,6 @@ Key capabilities:
 | Testing | Vitest 3 + React Testing Library + JSDOM |
 | Editor | Monaco Editor (`@monaco-editor/react`) |
 | JSX Compiler | `@babel/standalone` (browser runtime) |
-
----
-
-## Repository Structure
-
-```
-/
-├── prisma/
-│   ├── schema.prisma          # DB schema (User, Project models)
-│   └── migrations/            # SQLite migration history
-├── src/
-│   ├── actions/               # Next.js server actions
-│   │   ├── create-project.ts
-│   │   ├── get-project.ts
-│   │   └── get-projects.ts
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx           # Home page (new project entry point)
-│   │   ├── main-content.tsx   # Root split-panel UI layout
-│   │   ├── [projectId]/page.tsx  # Per-project route
-│   │   └── api/chat/route.ts  # Streaming chat endpoint (POST)
-│   ├── components/
-│   │   ├── ui/                # Shadcn UI primitives (do not modify manually)
-│   │   ├── auth/              # AuthDialog, SignInForm, SignUpForm
-│   │   ├── chat/              # ChatInterface, MessageInput, MessageList, MarkdownRenderer
-│   │   ├── editor/            # CodeEditor, FileTree
-│   │   └── preview/           # PreviewFrame (sandboxed iframe)
-│   ├── hooks/
-│   │   └── use-auth.ts
-│   ├── lib/
-│   │   ├── contexts/          # React contexts: chat-context, file-system-context
-│   │   ├── prompts/           # System prompt for Claude (generation.tsx)
-│   │   ├── tools/             # AI tool definitions: str-replace.ts, file-manager.ts
-│   │   ├── transform/         # jsx-transformer.ts (Babel-based preview compiler)
-│   │   ├── auth.ts            # JWT helpers (server-only)
-│   │   ├── file-system.ts     # Virtual file system implementation
-│   │   ├── prisma.ts          # Prisma client singleton
-│   │   └── provider.ts        # LLM provider (Anthropic or MockLanguageModel)
-│   └── middleware.ts          # Route protection for /api/projects, /api/filesystem
-├── components.json            # Shadcn UI config
-├── next.config.ts
-├── vitest.config.mts
-└── package.json
-```
 
 ---
 
@@ -105,8 +63,12 @@ If `ANTHROPIC_API_KEY` is absent, the app falls back to `MockLanguageModel`, whi
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint (Next.js config) |
 | `npm run test` | Run Vitest suite |
+| `npm run test -- --watch` | Watch mode |
+| `npm run test -- --ui` | Open Vitest UI |
 | `npm run setup` | Full initial setup (install + prisma generate + migrate) |
 | `npm run db:reset` | **Destructive**: wipe and reinitialize database |
+
+To run a single test file: `npm run test -- path/to/file.test.ts`
 
 ---
 
@@ -118,10 +80,11 @@ All generated code lives in-memory (`src/lib/file-system.ts`). There are no writ
 
 ### AI Integration Pattern
 
-Claude does **not** output code in chat messages directly. Instead, it calls two tools:
+Claude does **not** output code in chat messages directly. Instead, it calls three tools:
 
 - **`str_replace_editor`** — view, create, str_replace, or insert content into virtual files
 - **`file_manager`** — rename or delete virtual files
+- **`insert_registry_component`** — insert a registry component into a virtual file by name
 
 Tool definitions live in `src/lib/tools/`. The chat API route (`src/app/api/chat/route.ts`) orchestrates streaming via Vercel AI SDK's `streamText`, with a max of 40 tool steps per request.
 
@@ -135,6 +98,48 @@ Tool definitions live in `src/lib/tools/`. The chat API route (`src/app/api/chat
 4. `@/` path aliases map to virtual files
 5. The resulting HTML is injected into a sandboxed `<iframe>` in `PreviewFrame.tsx`
 
+### Component Registry
+
+`src/lib/registry/index.ts` is a read-only catalogue of all available Shadcn/Radix primitives and higher-level composed blocks. Claude **must** compose generated UIs exclusively from these entries. The registry exports:
+- `componentRegistry` — all entries (primitives + blocks)
+- `getRegistryList()` — compact string for injecting into system prompts
+
+Blocks live in `src/components/blocks/` (e.g., `PricingCard`, `FeatureGrid`, `AuthForm`, `DashboardHeader`, `SidebarNav`, `DataTable`).
+
+### Starter Templates
+
+`src/lib/templates/` contains 10 pre-built starter templates (dashboard, landing, auth, user-profile, ecommerce, blog-post, settings, saas-analytics, onboarding-wizard, marketing-pricing). Each template is a JSON file with a `files` map of `FileNode` entries. Templates are loaded via `getTemplates()` / `getTemplate(id)`.
+
+### Snapshot & Branch System
+
+Projects support version snapshots and named branches:
+- **`ProjectSnapshot`** — point-in-time save of messages + file data; can be pinned, tagged, named, and associated with a branch
+- Snapshots track merge provenance (`mergedFromSnapshotId`) and fork provenance (`forkedFromSnapshotId` on `Project`)
+- Branch names drive governance policy auto-assignment (see below)
+
+Relevant server actions: `get-snapshots`, `get-snapshot`, `restore-snapshot`, `fork-snapshot`, `update-snapshot`, `set-branch`, `rename-branch`, `fork-project`
+
+### Governance & Branch Policies
+
+`src/lib/governance/enforce.ts` enforces write rules per branch:
+
+| Branch prefix | Default policy |
+|---|---|
+| (other) | `OPEN` — anyone can write |
+| `protected/` | `AI_ONLY` — only AI actors |
+| `release/` | `HUMAN_ONLY` — only human actors; direct mutations forbidden except `MERGE`/`PUBLISH` |
+
+Policy types: `OPEN`, `AI_ONLY`, `HUMAN_ONLY`, `LOCKED`. All policy changes and publish events are logged to `GovernanceEvent`. Call `enforceBranchPolicy()` before any mutation action.
+
+### Public Artifact Registry
+
+Published components are stored as `PublicArtifact` records:
+- Only publishable from `release/*` branches with `HUMAN_ONLY` policy (authenticated users only)
+- `publish-artifact` action computes `filesHash` (SHA-256 of all file paths+contents) and `policyHash` for tamper detection
+- Artifacts track `parentArtifactId` for remix lineage; `remixCount` is incremented on remix
+- Registry API (`GET /api/registry`) supports search, tag filtering, and sort by `createdAt` or `remixCount`; uses in-memory filtering on SQLite fetched rows (MVP)
+- `get-artifact-lineage` action walks the parent chain to return an ancestry list
+
 ### State Management
 
 Two React contexts manage global state:
@@ -142,16 +147,40 @@ Two React contexts manage global state:
 - **`ChatContext`** (`src/lib/contexts/chat-context.tsx`): wraps Vercel AI SDK's `useChat`, exposes messages and submission handler
 - **`FileSystemContext`** (`src/lib/contexts/file-system-context.tsx`): owns the `FileSystem` instance; processes tool call results from the chat stream to update files
 
-### Authentication
+### Authentication & Rate Limiting
 
 - JWT tokens issued on sign-in, stored in `httpOnly` cookies (7-day expiry)
 - `src/lib/auth.ts` is `server-only` — never imported client-side
 - Middleware at `src/middleware.ts` guards `/api/projects` and `/api/filesystem`
-- Projects are associated with users but `userId` is optional (supports anonymous sessions)
+- `src/lib/rate-limiter.ts` — in-memory sliding-window limiter (default: 20 req/min); auth endpoints use a stricter 10 req/15 min limit
+- All auth server actions (`signUp`, `signIn`) apply rate limiting per client IP before any DB work
 
 ### Language Model Provider
 
 `src/lib/provider.ts` exports a `getModel()` function. When `ANTHROPIC_API_KEY` is set it returns `claude-sonnet-4-0`; otherwise it returns `MockLanguageModel` for development without API costs.
+
+---
+
+## Database
+
+Prisma with SQLite. Schema is at `prisma/schema.prisma`.
+
+**Models:**
+- `User` — id, email, password (hashed)
+- `Project` — id, name, userId (optional), public, messages (JSON), data (JSON), forkedFromSnapshotId, remixedFromArtifactId
+- `ProjectSnapshot` — id, projectId, label, name, tags, pinned, branchName, isVersionTag, mergedFromSnapshotId, messages, data
+- `BranchPolicy` — projectId + branchName (unique), policyType (`OPEN`|`AI_ONLY`|`HUMAN_ONLY`|`LOCKED`)
+- `GovernanceEvent` — projectId, type, actor, details (JSON), timestamp
+- `PublicArtifact` — id, projectId, branchName, version, name, manifest (JSON), filesData, previewImage, authorId, remixCount, parentArtifactId
+
+**Common commands:**
+```bash
+npx prisma migrate dev --name <migration-name>   # create and apply a new migration
+npx prisma studio                                 # open Prisma Studio GUI
+npm run db:reset                                  # wipe DB and re-run migrations (dev only)
+```
+
+The Prisma client is generated to `src/generated/prisma` (not the default location). Import it from `src/lib/prisma.ts` which exports a singleton.
 
 ---
 
@@ -173,11 +202,10 @@ Two React contexts manage global state:
 
 - Tailwind CSS v4 — use utility classes exclusively
 - `clsx` + `tailwind-merge` via `src/lib/utils.ts` `cn()` helper for conditional classes
-- `class-variance-authority` (CVA) for component variants in Shadcn primitives
 
 ### Server vs. Client
 
-- Default to React Server Components; add `"use client"` only when needed (interactivity, hooks, browser APIs)
+- Default to React Server Components; add `"use client"` only when needed
 - Server actions in `src/actions/` use `"use server"` and interact directly with Prisma
 - API routes in `src/app/api/` handle streaming and complex server logic
 
@@ -185,62 +213,45 @@ Two React contexts manage global state:
 
 ## Testing
 
-Tests use **Vitest** with **React Testing Library** in a **JSDOM** environment.
-
-```bash
-npm run test              # run all tests once
-npm run test -- --watch   # watch mode
-npm run test -- --ui      # open Vitest UI
-```
-
-Test files are placed in `__tests__/` directories next to the code they test (e.g., `src/lib/transform/__tests__/jsx-transformer.test.ts`).
+Tests use **Vitest** with **React Testing Library** in a **JSDOM** environment. Test files live in `__tests__/` directories next to the code they test.
 
 Key test areas:
-- `src/lib/__tests__/file-system.test.ts` — virtual file system CRUD operations
-- `src/lib/transform/__tests__/jsx-transformer.test.ts` — JSX compilation and import map generation
+- `src/lib/__tests__/file-system.test.ts` — virtual FS CRUD
+- `src/lib/__tests__/rate-limiter.test.ts` — rate limiter sliding window
+- `src/lib/transform/__tests__/jsx-transformer.test.ts` — JSX compilation and import map
+- `src/lib/governance/__tests__/enforce.test.ts` — branch policy enforcement
 - `src/lib/contexts/__tests__/` — chat and file system context behaviour
-- `src/components/chat/__tests__/` — chat UI component rendering
+- `src/components/chat/__tests__/` — chat UI rendering
 - `src/components/editor/__tests__/` — file tree rendering
-
-When adding new features, add corresponding tests. Aim to cover happy paths and error cases for any utility or context logic.
-
----
-
-## Database
-
-Prisma with SQLite. Schema is at `prisma/schema.prisma`.
-
-**Models:**
-- `User` — id, email, password (hashed), createdAt, updatedAt
-- `Project` — id, name, userId (optional FK → User), messages (JSON), data (JSON), createdAt, updatedAt
-
-**Common commands:**
-```bash
-npx prisma migrate dev --name <migration-name>   # create and apply a new migration
-npx prisma studio                                 # open Prisma Studio GUI
-npm run db:reset                                  # wipe DB and re-run migrations (dev only)
-```
-
-The Prisma client is generated to `src/generated/prisma` (not the default location). Import it from `src/lib/prisma.ts` which exports a singleton.
+- `src/actions/__tests__/` — server action behaviour (publish-artifact, remix-artifact, get-artifact-lineage)
+- `src/app/api/chat/__tests__/route.test.ts` — chat route
+- `src/app/api/registry/__tests__/route.test.ts` — registry API
 
 ---
 
 ## Key Files for AI Assistants
 
-When implementing features or debugging, these files are most frequently relevant:
-
 | File | Purpose |
 |---|---|
 | `src/app/api/chat/route.ts` | Chat streaming endpoint — start here for AI flow issues |
+| `src/app/api/registry/route.ts` | Public artifact registry GET endpoint |
 | `src/lib/file-system.ts` | Virtual FS — all file operations go through this |
 | `src/lib/contexts/file-system-context.tsx` | Processes tool calls and updates file state |
-| `src/lib/tools/str-replace.ts` | Definition of the `str_replace_editor` tool |
-| `src/lib/tools/file-manager.ts` | Definition of the `file_manager` tool |
+| `src/lib/tools/str-replace.ts` | `str_replace_editor` tool definition |
+| `src/lib/tools/file-manager.ts` | `file_manager` tool definition |
+| `src/lib/tools/insert-registry-component.ts` | `insert_registry_component` tool definition |
+| `src/lib/registry/index.ts` | Component catalogue Claude uses when generating UIs |
+| `src/lib/templates/index.ts` | Starter template registry |
+| `src/lib/governance/enforce.ts` | Branch policy enforcement |
 | `src/lib/transform/jsx-transformer.ts` | Preview compilation pipeline |
 | `src/lib/prompts/generation.tsx` | System prompt sent to Claude |
 | `src/lib/provider.ts` | LLM model selection (real vs. mock) |
+| `src/lib/rate-limiter.ts` | In-memory rate limiter |
 | `src/components/preview/PreviewFrame.tsx` | Sandboxed preview iframe |
 | `prisma/schema.prisma` | Database schema |
+| `src/actions/publish-artifact.ts` | Artifact publish flow (governance-gated) |
+| `src/actions/remix-artifact.ts` | Fork an artifact into a new project |
+| `src/actions/get-artifact-lineage.ts` | Walk parent chain for ancestry |
 
 ---
 
@@ -252,3 +263,6 @@ When implementing features or debugging, these files are most frequently relevan
 4. **Shadcn components in `src/components/ui/` are auto-generated.** Edit them via the Shadcn CLI, not by hand.
 5. **`npm run db:reset` is destructive.** It drops all data. Never run this against a production database.
 6. **`MockLanguageModel` is active when `ANTHROPIC_API_KEY` is unset.** If AI responses seem wrong in dev, check whether the real model is being used.
+7. **Publishing requires a `release/*` branch with `HUMAN_ONLY` policy.** `enforceBranchPolicy` will throw otherwise — this is intentional governance.
+8. **Registry search/tag filtering is in-memory.** The `GET /api/registry` route fetches all rows then filters in JS. This is a SQLite MVP pattern — don't add DB-level filtering without schema changes.
+9. **Rate limiter state is in-process memory.** It resets on server restart and does not share state across multiple instances. Not suitable for production multi-instance deployments without a shared store.
