@@ -33,6 +33,29 @@ No free-form code hallucinations: Claude uses **structured tool calls** only (`s
 
 ---
 
+## Try the Demo (No API Key Needed)
+
+Download seeded artifacts to experience governed publishing, remix chains, and lineage visualization — all in **mock mode, zero cost**:
+
+**[⬇ v0.1.0-seed Release — 6 ready-to-run ZIPs](https://github.com/SifisoScS/uigen/releases/tag/v0.1.0-seed)**
+
+Two lineage chains included:
+- **AuthForm** — base form → dark mode toggle → Google OAuth + loading state
+- **PricingCard** — base 3-tier cards → monthly/annual toggle → annual savings badges
+
+```bash
+# 1. Download any ZIP from the release page
+unzip uigen-seed-auth-v1.2.0.zip -d my-auth-form
+cd my-auth-form
+npm install
+npm run dev
+# → open http://localhost:3000
+```
+
+Then explore `/registry` → click an artifact → `/share/[id]` for the manifest + ancestry chain → `/lineage/[id]` for the interactive pan/zoom provenance graph.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -86,7 +109,7 @@ Sign up (or continue anonymously) → describe a component → watch it appear.
 | Mock fallback | Static demo tool calls when `ANTHROPIC_API_KEY` is absent | ✓ |
 | Rate limiting + Security | Per-IP sliding window, CSP headers, error boundaries | ✓ |
 | Accessibility | `aria-live` strength meter, `aria-describedby` on inputs | ✓ |
-| Testing & CI | 231 Vitest + RTL tests · GitHub Actions (lint → tsc → test) | ✓ |
+| Testing & CI | 265+ Vitest + RTL tests · GitHub Actions (lint → tsc → test) | ✓ |
 | Docker | Multi-stage Dockerfile + docker-compose with SQLite volume | ✓ |
 
 ---
@@ -101,7 +124,7 @@ Sign up (or continue anonymously) → describe a component → watch it appear.
 | AI | Anthropic Claude via Vercel AI SDK + `@ai-sdk/anthropic` |
 | Editor | Monaco Editor (`@monaco-editor/react`) |
 | JSX Compiler | `@babel/standalone` (browser runtime) |
-| Database | Prisma 6 + SQLite (drop-in Postgres swap via Prisma) |
+| Database | Prisma 6 + PostgreSQL (Neon); SQLite supported for local dev |
 | Auth | JWT (`jose`) + bcrypt, httpOnly cookies |
 | Testing | Vitest 3 + React Testing Library + JSDOM |
 
@@ -130,6 +153,8 @@ NODE_ENV=development              # Set to production for secure cookies
 | `npm run build` | Production build |
 | `npm run test` | Run Vitest suite |
 | `npm run lint` | ESLint |
+| `npm run db:seed` | Seed demo lineage chains into the database |
+| `npm run db:export-zips` | Export seeded artifacts as ZIP files to `exports/` |
 
 ---
 
