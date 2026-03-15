@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Sparkles, Loader2, CheckSquare } from "lucide-react";
+import { Bot, Sparkles, Loader2, CheckSquare, GitMerge } from "lucide-react";
 import { critiqueArtifact, type AggregatedCritique } from "@/actions/critique-artifact";
 import { generateSelectedVariants } from "@/actions/generate-selected-variants";
+import { coordinateCritiques, type MergedCritique } from "@/actions/coordinate-critiques";
 
 interface FlatSuggestion {
   text: string;
@@ -33,9 +34,12 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [critiqueError, setCritiqueError] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [coordinateError, setCoordinateError] = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
+  const [merged, setMerged] = useState<MergedCritique | null>(null);
   const [isCritiquing, startCritique] = useTransition();
   const [isGenerating, startGenerate] = useTransition();
+  const [isCoordinating, startCoordinate] = useTransition();
 
   // Flatten all agent suggestions into a stable indexed list
   // critiques arrive pre-sorted by finalScore descending from the server action
@@ -76,6 +80,19 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
         next.add(index);
       }
       return next;
+    });
+  }
+
+  function handleCoordinateCritiques() {
+    if (!critiques) return;
+    setCoordinateError(null);
+    startCoordinate(async () => {
+      try {
+        const result = await coordinateCritiques({ artifactId, agentCritiques: critiques });
+        setMerged(result.mergedCritique);
+      } catch (err) {
+        setCoordinateError(err instanceof Error ? err.message : "Coordination failed");
+      }
     });
   }
 
@@ -189,6 +206,48 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
               </div>
             </label>
           ))}
+
+          {/* Coordinate button */}
+          {!merged && (
+            <div className="pt-1">
+              <button
+                onClick={handleCoordinateCritiques}
+                disabled={isCoordinating}
+                data-testid="coordinate-critiques-btn"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-950/40 border border-indigo-700/40 text-indigo-300 hover:bg-indigo-900/40 hover:border-indigo-600/50 transition-colors disabled:opacity-50"
+              >
+                {isCoordinating ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <GitMerge className="h-3 w-3" />
+                )}
+                {isCoordinating ? "Coordinating…" : "Coordinate critiques"}
+              </button>
+              {coordinateError && (
+                <p className="text-[11px] text-red-400 mt-1">{coordinateError}</p>
+              )}
+            </div>
+          )}
+
+          {/* Merged critique result */}
+          {merged && (
+            <div
+              data-testid="merged-critique-result"
+              className="rounded-lg border border-indigo-800/30 bg-indigo-950/10 p-3 flex flex-col gap-2"
+            >
+              <p className="text-[10px] font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                <GitMerge className="h-3 w-3" />
+                Coordinated by {merged.mergedBy}
+              </p>
+              <div className="flex flex-col gap-1">
+                {merged.suggestions.map((s, i) => (
+                  <p key={i} className="text-[11px] text-neutral-300 leading-snug">
+                    • {s}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Generate button */}
           <div className="flex items-center gap-3 pt-1 flex-wrap">
