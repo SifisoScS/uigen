@@ -13,6 +13,7 @@ vi.mock("@/lib/prisma", () => ({
     artifactRelation: { create: vi.fn() },
     governanceEvent: { create: vi.fn() },
     project: { create: vi.fn() },
+    agentReputation: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }));
 
@@ -69,6 +70,7 @@ const VARIANT_PROJECT = {
   data: "{}",
   forkedFromSnapshotId: null,
   remixedFromArtifactId: null,
+  agentName: null,
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ beforeEach(() => {
   vi.mocked(prisma.artifactRelation.create).mockResolvedValue({ id: "rel-1" } as never);
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
   vi.mocked(prisma.project.create).mockResolvedValue(VARIANT_PROJECT as never);
+  vi.mocked(prisma.agentReputation.findFirst).mockResolvedValue(null);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -191,6 +194,16 @@ describe("critiqueArtifact", () => {
           name: expect.stringContaining("Add aria-label"),
           data: "{}",
         }),
+      })
+    );
+  });
+
+  it("sets agentName on variant projects in single-agent mode", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agentName: "Claude" });
+
+    expect(prisma.project.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ agentName: "Claude" }),
       })
     );
   });

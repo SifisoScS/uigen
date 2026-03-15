@@ -41,6 +41,7 @@ function eventLabel(type: string): string {
     case "ARTIFACT_CRITIQUE_MERGED":           return "Critique merged";
     case "ARTIFACT_VARIANT_MUTATED":           return "Suggestion applied";
     case "ARTIFACT_VARIANT_PUBLISHED":         return "Next generation published";
+    case "AGENT_REPUTATION_UPDATED":           return "Reputation updated";
     default:                                 return type;
   }
 }
@@ -63,6 +64,7 @@ function eventAccent(type: string): string {
     case "ARTIFACT_CRITIQUE_MERGED":           return "text-indigo-400";
     case "ARTIFACT_VARIANT_MUTATED":           return "text-violet-400";
     case "ARTIFACT_VARIANT_PUBLISHED":         return "text-indigo-400";
+    case "AGENT_REPUTATION_UPDATED":           return "text-sky-400";
     default:                                 return "text-neutral-400";
   }
 }

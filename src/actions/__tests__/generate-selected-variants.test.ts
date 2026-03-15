@@ -154,4 +154,17 @@ describe("generateSelectedVariants", () => {
     expect(result.variantIds).toHaveLength(2);
     expect(result.variantIds[0]).toBe("proj-var-1");
   });
+
+  it("sets agentName on variant project matching the suggestion's agentName", async () => {
+    await generateSelectedVariants({
+      artifactId: "art-1",
+      suggestions: [{ text: "Add aria-label", agentName: "Claude" }],
+    });
+
+    expect(prisma.project.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ agentName: "Claude" }),
+      })
+    );
+  });
 });

@@ -187,6 +187,7 @@ describe("POST /api/chat", () => {
         data: "{}",
         forkedFromSnapshotId: null,
         remixedFromArtifactId: null,
+        agentName: null,
         status: "DRAFT",
         approvedAt: null,
         approvedBy: null,
