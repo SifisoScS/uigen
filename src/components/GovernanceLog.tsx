@@ -25,21 +25,23 @@ function relativeTime(date: Date): string {
 
 function eventLabel(type: string): string {
   switch (type) {
-    case "BRANCH_POLICY_SET":     return "Policy set";
-    case "BRANCH_POLICY_CHANGED": return "Policy changed";
-    case "ARTIFACT_PUBLISHED":    return "Published";
-    case "RELEASE_TAG_CREATED":   return "Release created";
-    default:                      return type;
+    case "BRANCH_POLICY_SET":          return "Policy set";
+    case "BRANCH_POLICY_CHANGED":      return "Policy changed";
+    case "ARTIFACT_PUBLISHED":         return "Published";
+    case "RELEASE_TAG_CREATED":        return "Release created";
+    case "ARTIFACT_RELATION_CREATED":  return "Relation created";
+    default:                           return type;
   }
 }
 
 function eventAccent(type: string): string {
   switch (type) {
-    case "BRANCH_POLICY_SET":     return "text-blue-400";
-    case "BRANCH_POLICY_CHANGED": return "text-amber-400";
-    case "ARTIFACT_PUBLISHED":    return "text-emerald-400";
-    case "RELEASE_TAG_CREATED":   return "text-purple-400";
-    default:                      return "text-neutral-400";
+    case "BRANCH_POLICY_SET":          return "text-blue-400";
+    case "BRANCH_POLICY_CHANGED":      return "text-amber-400";
+    case "ARTIFACT_PUBLISHED":         return "text-emerald-400";
+    case "RELEASE_TAG_CREATED":        return "text-purple-400";
+    case "ARTIFACT_RELATION_CREATED":  return "text-amber-300";
+    default:                           return "text-neutral-400";
   }
 }
 
