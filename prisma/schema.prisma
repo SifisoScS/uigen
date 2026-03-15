@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -12,59 +9,56 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String    @id @default(cuid())
+  email     String    @unique
   password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   projects  Project[]
 }
 
 model Project {
-  id                   String   @id @default(cuid())
-  name                 String
-  userId               String?
-  public               Boolean  @default(false)
-  messages             String   @default("[]")
-  data                 String   @default("{}")
-  forkedFromSnapshotId   String?
-  remixedFromArtifactId  String?  // PublicArtifact.id this project was remixed from
-  status               String   @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
-  approvedAt           DateTime?
-  approvedBy           String?  // userId of approver
-  mergedFromVariantId  String?  // variant Project.id that was merged into this project
-  mergedAt             DateTime?
-  conflictResolvedAt   DateTime? // set when a conflict was detected and resolved before merge
-  mutationAppliedAt    DateTime? // set once applyVariantSuggestion completes successfully
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-
-  user               User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  snapshots          ProjectSnapshot[]
-  forkedFromSnapshot ProjectSnapshot? @relation("ForkSource", fields: [forkedFromSnapshotId], references: [id], onDelete: SetNull)
+  id                    String            @id @default(cuid())
+  name                  String
+  userId                String?
+  public                Boolean           @default(false)
+  messages              String            @default("[]")
+  data                  String            @default("{}")
+  forkedFromSnapshotId  String?
+  remixedFromArtifactId String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  approvedAt            DateTime?
+  approvedBy            String?
+  status                String            @default("DRAFT")
+  mergedAt              DateTime?
+  mergedFromVariantId   String?
+  conflictResolvedAt    DateTime?
+  mutationAppliedAt     DateTime?
+  forkedFromSnapshot    ProjectSnapshot?  @relation("ForkSource", fields: [forkedFromSnapshotId], references: [id])
+  user                  User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots             ProjectSnapshot[]
 
   @@index([userId])
 }
 
 model ProjectSnapshot {
-  id                   String   @id @default(cuid())
+  id                   String            @id @default(cuid())
   projectId            String
   label                String
   name                 String?
-  tags                 String   @default("[]")
-  pinned               Boolean  @default(false)
+  tags                 String            @default("[]")
+  pinned               Boolean           @default(false)
   branchName           String?
-  isVersionTag         Boolean  @default(false)
+  isVersionTag         Boolean           @default(false)
   mergedFromSnapshotId String?
-  messages             String   @default("[]")
-  data                 String   @default("{}")
-  createdAt            DateTime @default(now())
-
-  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  forks        Project[]          @relation("ForkSource")
-  mergedFrom   ProjectSnapshot?   @relation("MergeSource", fields: [mergedFromSnapshotId], references: [id], onDelete: SetNull)
-  mergedInto   ProjectSnapshot[]  @relation("MergeSource")
+  messages             String            @default("[]")
+  data                 String            @default("{}")
+  createdAt            DateTime          @default(now())
+  forks                Project[]         @relation("ForkSource")
+  mergedFrom           ProjectSnapshot?  @relation("MergeSource", fields: [mergedFromSnapshotId], references: [id])
+  mergedInto           ProjectSnapshot[] @relation("MergeSource")
+  project              Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
@@ -73,9 +67,9 @@ model BranchPolicy {
   id         String   @id @default(cuid())
   projectId  String
   branchName String
-  policyType String   // "OPEN" | "AI_ONLY" | "HUMAN_ONLY" | "LOCKED" — runtime validated
-  rules      Json?    // future: { requireApproval: true, allowedTools: [...] }
-  createdBy  String?  // userId or "claude"
+  policyType String
+  rules      Json?
+  createdBy  String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -86,8 +80,8 @@ model BranchPolicy {
 model GovernanceEvent {
   id        String   @id @default(cuid())
   projectId String
-  type      String   // "BRANCH_POLICY_SET" | "BRANCH_POLICY_CHANGED" | "ARTIFACT_PUBLISHED" | "RELEASE_TAG_CREATED"
-  actor     String?  // userId or "claude"
+  type      String
+  actor     String?
   details   Json?
   timestamp DateTime @default(now())
 
@@ -98,18 +92,18 @@ model DatasetSnapshot {
   id            String   @id @default(cuid())
   name          String
   description   String?
-  format        String?  // "csv", "json", "parquet", etc.
+  format        String?
   rowCount      Int?
-  columnSummary Json?    // stub: { columns: ["name"], types: ["string"] }
+  columnSummary Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
 
 model AgentInvocation {
   id           String   @id @default(cuid())
-  agentName    String   // "Claude", "Grok", "StubAgent", etc.
+  agentName    String
   prompt       String
-  critiqueJson Json?    // { suggestions: string[], issues: string[] }
+  critiqueJson Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -120,23 +114,20 @@ model WorkflowRun {
   id            String   @id @default(cuid())
   name          String
   description   String?
-  workflowId    String?  // future foreign key to a Workflow model
-  inputData     Json?    // { prompt, model, ... }
+  workflowId    String?
+  inputData     Json?
   outputSummary String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
 
-// Generic cross-artifact relation table.
-// Uses string parentType/childType for polymorphism — no DB-level FK constraint
-// (Prisma doesn't support polymorphic relations natively).
 model ArtifactRelation {
   id           String   @id @default(cuid())
-  parentType   String   // "WorkflowRun" | "DatasetSnapshot" | "AgentInvocation" …
-  parentId     String   // ID in the table identified by parentType
-  childType    String   // "PublicArtifact" | "Project" …
-  childId      String   // ID in the table identified by childType
-  relationType String   // "GENERATED_BY" | "INFORMED_BY" | "USED_IN" …
+  parentType   String
+  parentId     String
+  childType    String
+  childId      String
+  relationType String
   createdAt    DateTime @default(now())
 
   @@unique([parentType, parentId, childType, childId])
@@ -145,24 +136,24 @@ model ArtifactRelation {
 }
 
 model PublicArtifact {
-  id           String   @id @default(cuid())
-  projectId    String
-  branchName   String
-  version      String
-  name         String
-  description  String?
-  manifest     Json
-  filesData    String   // serialized project data (JSON) — enables remix
-  previewImage      String?  // base64-encoded PNG or external URL
-  authorId          String?
-  remixCount        Int      @default(0)
-  lastRemixedAt     DateTime?
-  parentArtifactId  String?  // PublicArtifact.id this was remixed from
-  semanticSummary   String?  // e.g. "Responsive pricing card with monthly/annual toggle"
-  componentTree     Json?    // stub AST-like: { type: "component", name: "...", children: [] }
-  styleSignature    Json?    // stub: { colors: ["text-neutral-100"], spacing: ["gap-4", "p-6"] }
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String    @id @default(cuid())
+  projectId        String
+  branchName       String
+  version          String
+  name             String
+  description      String?
+  manifest         Json
+  filesData        String
+  previewImage     String?
+  authorId         String?
+  remixCount       Int       @default(0)
+  lastRemixedAt    DateTime?
+  parentArtifactId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  componentTree    Json?
+  semanticSummary  String?
+  styleSignature   Json?
 
   @@index([projectId])
   @@index([createdAt])

@@ -349,19 +349,38 @@ export class VirtualFileSystem {
     }
   }
 
-  deserializeFromNodes(data: Record<string, FileNode>): void {
+  deserializeFromNodes(data: Record<string, unknown>): void {
     // Clear existing files except root
     this.files.clear();
     this.root.children?.clear();
     this.files.set("/", this.root);
 
-    // Sort paths to ensure parent directories are created first
+    // Detect tree format: seed script produces { type: "directory", path: "/", children: {...} }
+    // vs flat format from serialize(): { "/": {...}, "/App.jsx": {...} }
+    if ((data as Record<string, unknown>).type === "directory") {
+      const walkTree = (node: unknown): void => {
+        if (!node || typeof node !== "object") return;
+        const n = node as Record<string, unknown>;
+        if (n.type === "file" && typeof n.path === "string") {
+          this.createFile(n.path, typeof n.content === "string" ? n.content : "");
+        }
+        if (n.children && typeof n.children === "object") {
+          for (const child of Object.values(n.children as Record<string, unknown>)) {
+            walkTree(child);
+          }
+        }
+      };
+      walkTree(data);
+      return;
+    }
+
+    // Flat format (from serialize()) — keys are paths like "/App.jsx"
     const paths = Object.keys(data).sort();
 
     for (const path of paths) {
       if (path === "/") continue; // Skip root
 
-      const node = data[path];
+      const node = data[path] as FileNode;
       const parts = path.split("/").filter(Boolean);
       let currentPath = "";
 

@@ -14,8 +14,12 @@ export default async function ProjectPage({ params }: PageProps) {
   let project;
   try {
     project = await getProject(projectId);
-  } catch {
-    redirect("/");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === "Project not found" || message === "Unauthorized") {
+      redirect("/");
+    }
+    throw err;
   }
 
   return <MainContent user={user} project={project} />;
