@@ -508,47 +508,57 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
             ))}
           </svg>
 
-          {/* Cross-parent node cards (WorkflowRun / DatasetSnapshot / AgentInvocation) */}
+          {/* Cross-parent node cards (WorkflowRun / DatasetSnapshot / AgentInvocation / MergedCritique) */}
           {layout.workflowNodes.map((cp) => {
             const isDataset = cp.parentType === "DatasetSnapshot";
             const isAgent   = cp.parentType === "AgentInvocation";
+            const isMerge   = cp.relationType === "CRITIQUE_MERGED_INTO";
 
             let testId: string;
-            if (isDataset) testId = `dataset-node-${cp.id}`;
+            if (isMerge) testId = `merge-node-${cp.id}`;
+            else if (isDataset) testId = `dataset-node-${cp.id}`;
             else if (isAgent) testId = `agent-node-${cp.id}`;
             else testId = `workflow-node-${cp.id}`;
 
             const href = isDataset
               ? `/dataset-snapshot/${cp.id}`
-              : isAgent
+              : isAgent || isMerge
               ? `/agent-invocation/${cp.id}`
               : `/workflow-run/${cp.id}`;
 
-            const nameColor = isDataset
+            const nameColor = isMerge
+              ? "text-indigo-400/80"
+              : isDataset
               ? "text-emerald-400/80"
               : isAgent
               ? "text-orange-400/80"
               : "text-amber-400/80";
 
-            const badgeClass = isDataset
+            const badgeClass = isMerge
+              ? "text-indigo-700 bg-indigo-950/60 border border-indigo-800/40"
+              : isDataset
               ? "text-emerald-700 bg-emerald-950/60 border border-emerald-800/40"
               : isAgent
               ? "text-orange-700 bg-orange-950/60 border border-orange-800/40"
               : "text-amber-700 bg-amber-950/60 border border-amber-800/40";
 
-            const borderClass = isDataset
+            const borderClass = isMerge
+              ? "border-indigo-800/60 hover:border-indigo-600/60"
+              : isDataset
               ? "border-emerald-800/60 hover:border-emerald-600/60"
               : isAgent
               ? "border-orange-800/60 hover:border-orange-600/60"
               : "border-dashed border-amber-800/60 hover:border-amber-600/60";
 
-            const relationColor = isDataset
+            const relationColor = isMerge
+              ? "text-indigo-800"
+              : isDataset
               ? "text-emerald-800"
               : isAgent
               ? "text-orange-800"
               : "text-amber-800";
 
-            const badge = isDataset ? "DATA" : isAgent ? "EVAL" : "RUN";
+            const badge = isMerge ? "MERGE" : isDataset ? "DATA" : isAgent ? "EVAL" : "RUN";
 
             return (
               <div
