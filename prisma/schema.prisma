@@ -87,6 +87,17 @@ model GovernanceEvent {
   @@index([projectId, timestamp])
 }
 
+model DatasetSnapshot {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  format        String?  // "csv", "json", "parquet", etc.
+  rowCount      Int?
+  columnSummary Json?    // stub: { columns: ["name"], types: ["string"] }
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 model WorkflowRun {
   id            String   @id @default(cuid())
   name          String

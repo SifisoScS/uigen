@@ -50,6 +50,7 @@ export async function publishArtifact({
   tags = [],
   previewImage = null,
   workflowRunId = null,
+  datasetSnapshotId = null,
 }: {
   projectId: string;
   branchName: string;
@@ -59,6 +60,7 @@ export async function publishArtifact({
   tags?: string[];
   previewImage?: string | null;
   workflowRunId?: string | null;
+  datasetSnapshotId?: string | null;
 }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
@@ -182,6 +184,39 @@ export async function publishArtifact({
           parentId: workflowRunId,
           childId: artifact.id,
           relationType: "GENERATED_BY",
+        },
+      },
+    });
+  }
+
+  // 11. Cross-artifact relation (optional DatasetSnapshot linkage)
+  if (datasetSnapshotId) {
+    const ds = await prisma.datasetSnapshot.findUnique({
+      where: { id: datasetSnapshotId },
+      select: { id: true },
+    });
+    if (!ds) throw new Error(`DatasetSnapshot not found: ${datasetSnapshotId}`);
+
+    await prisma.artifactRelation.create({
+      data: {
+        parentType: "DatasetSnapshot",
+        parentId: datasetSnapshotId,
+        childType: "PublicArtifact",
+        childId: artifact.id,
+        relationType: "INFORMED_BY",
+      },
+    });
+
+    await prisma.governanceEvent.create({
+      data: {
+        projectId,
+        type: "ARTIFACT_RELATION_CREATED",
+        actor: session.userId,
+        details: {
+          parentType: "DatasetSnapshot",
+          parentId: datasetSnapshotId,
+          childId: artifact.id,
+          relationType: "INFORMED_BY",
         },
       },
     });
