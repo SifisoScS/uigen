@@ -17,6 +17,17 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/sifiso-gate", () => ({
+  checkWithSovereignGate: vi.fn().mockResolvedValue({
+    passed: true,
+    ubuntu_score: 0.82,
+    failed_predicates: [],
+    rationale: "Gate bypassed — SIFISO_OS_URL not configured (development mode).",
+    log_entry_id: "0".repeat(64),
+    bypassed: true,
+  }),
+}));
+
 vi.mock("@/lib/artifact-introspection", () => ({
   computeFilesHash: vi.fn(() => "hash-abc"),
   computePolicyHash: vi.fn(() => "policy-hash"),
@@ -29,6 +40,7 @@ vi.mock("@/lib/artifact-introspection", () => ({
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
+const { checkWithSovereignGate } = await import("@/lib/sifiso-gate");
 const { publishVariantAsArtifact } = await import("../publish-variant-as-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -297,5 +309,64 @@ describe("publishVariantAsArtifact", () => {
     );
     expect(semanticCall).toBeDefined();
     expect((semanticCall![0] as unknown as { data: { details: { fromArtifactId: string } } }).data.details.fromArtifactId).toBe("art-1");
+  });
+});
+
+describe("publishVariantAsArtifact — Sovereign Gate", () => {
+  it("calls checkWithSovereignGate with variant_publish action and delta fields", async () => {
+    await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+
+    expect(checkWithSovereignGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uigen_action: "variant_publish",
+        human_approved: true,
+        a11y_delta: expect.any(Number),
+        lines_changed: expect.any(Number),
+        added_components: expect.any(Array),
+        removed_components: expect.any(Array),
+      })
+    );
+  });
+
+  it("stores ubuntuScore and gateLogEntryId in ARTIFACT_VARIANT_PUBLISHED governance event", async () => {
+    await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+
+    const calls = vi.mocked(prisma.governanceEvent.create).mock.calls;
+    const publishedCall = calls.find(
+      (c) => (c[0] as { data: { type: string } }).data.type === "ARTIFACT_VARIANT_PUBLISHED"
+    );
+    expect(publishedCall).toBeDefined();
+    const details = (publishedCall![0] as unknown as { data: { details: Record<string, unknown> } }).data.details;
+    expect(details.ubuntuScore).toBe(0.82);
+    expect(details.gateLogEntryId).toBe("0".repeat(64));
+  });
+
+  it("throws when gate check fails for variant publish", async () => {
+    vi.mocked(checkWithSovereignGate).mockRejectedValueOnce(
+      new Error("Ubuntu alignment gate failed (score 0.420 < θ 0.65). Failed predicates: Ubuntu Alignment.")
+    );
+
+    await expect(
+      publishVariantAsArtifact({ variantProjectId: "proj-var-1", originalArtifactId: "art-1" })
+    ).rejects.toThrow(/ubuntu alignment gate failed/i);
+  });
+
+  it("passes evaluation_passed=true to gate when latest eval passed", async () => {
+    vi.mocked(prisma.evaluationRun.findFirst).mockResolvedValue({ status: "PASSED" } as never);
+
+    await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+
+    expect(checkWithSovereignGate).toHaveBeenCalledWith(
+      expect.objectContaining({ evaluation_passed: true })
+    );
   });
 });

@@ -6,6 +6,17 @@ vi.mock("@/lib/auth", () => ({
   getSession: vi.fn(),
 }));
 
+vi.mock("@/lib/sifiso-gate", () => ({
+  checkWithSovereignGate: vi.fn().mockResolvedValue({
+    passed: true,
+    ubuntu_score: 0.82,
+    failed_predicates: [],
+    rationale: "Gate bypassed — SIFISO_OS_URL not configured (development mode).",
+    log_entry_id: "0".repeat(64),
+    bypassed: true,
+  }),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     artifactRelation: { findFirst: vi.fn() },
@@ -23,6 +34,7 @@ vi.mock("@/lib/prisma", () => ({
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
+const { checkWithSovereignGate } = await import("@/lib/sifiso-gate");
 const { approveVariant } = await import("../approve-variant");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -175,5 +187,42 @@ describe("approveVariant", () => {
     await approveVariant("proj-var-1", true);
 
     expect(prisma.agentReputation.upsert).not.toHaveBeenCalled();
+  });
+
+  it("calls checkWithSovereignGate with variant_approve action", async () => {
+    await approveVariant("proj-var-1", true);
+
+    expect(checkWithSovereignGate).toHaveBeenCalledWith(
+      expect.objectContaining({ uigen_action: "variant_approve", human_approved: true }),
+      expect.objectContaining({ throwOnFail: false })
+    );
+  });
+
+  it("stores ubuntuScore and gateLogEntryId in the governance event", async () => {
+    await approveVariant("proj-var-1", true);
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          details: expect.objectContaining({
+            ubuntuScore: 0.82,
+            gateLogEntryId: "0".repeat(64),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("proceeds even when gate passes=false (throwOnFail disabled for approvals)", async () => {
+    vi.mocked(checkWithSovereignGate).mockResolvedValueOnce({
+      passed: false,
+      ubuntu_score: 0.45,
+      failed_predicates: ["Ubuntu Alignment"],
+      rationale: "Low alignment",
+      log_entry_id: "f".repeat(64),
+    });
+
+    // Should not throw — approval proceeds regardless of gate score
+    await expect(approveVariant("proj-var-1", true)).resolves.toEqual({ status: "APPROVED" });
   });
 });

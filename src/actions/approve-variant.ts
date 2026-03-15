@@ -3,6 +3,7 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordVariantOutcome } from "@/lib/agent-reputation";
+import { checkWithSovereignGate } from "@/lib/sifiso-gate";
 
 export type VariantStatus = "DRAFT" | "APPROVED" | "REJECTED";
 
@@ -29,6 +30,12 @@ export async function approveVariant(
     },
   });
   if (!relation) throw new Error("Not a variant project");
+
+  // Sovereign Gate pre-flight check
+  const gateResult = await checkWithSovereignGate(
+    { uigen_action: "variant_approve", human_approved: approved },
+    { throwOnFail: false },  // approval/rejection must always proceed regardless of score
+  );
 
   const newStatus: VariantStatus = approved ? "APPROVED" : "REJECTED";
 
@@ -59,6 +66,8 @@ export async function approveVariant(
         projectId,
         parentArtifactId: relation.parentId,
         approved,
+        ubuntuScore: gateResult.ubuntu_score,
+        gateLogEntryId: gateResult.log_entry_id,
       },
     },
   });
