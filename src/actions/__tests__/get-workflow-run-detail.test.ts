@@ -34,7 +34,9 @@ const WF_RUN = {
   description: "Creates auth form components",
   outputSummary: "AuthForm with dark mode",
   inputData: { prompt: "auth form", model: "claude-sonnet" },
+  status: "PENDING",
   createdAt: new Date("2026-01-01"),
+  steps: [],
 };
 
 const ARTIFACT = {
@@ -86,7 +88,7 @@ describe("getWorkflowRunDetail", () => {
     expect(result).toBeNull();
   });
 
-  it("returns run data with empty artifacts when no relations exist", async () => {
+  it("returns run data with empty artifacts and steps when no relations exist", async () => {
     vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(WF_RUN as never);
     vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
 
@@ -95,11 +97,31 @@ describe("getWorkflowRunDetail", () => {
     expect(result).not.toBeNull();
     expect(result!.run.id).toBe("wf-1");
     expect(result!.run.name).toBe("Generate AuthForm");
+    expect(result!.run.status).toBe("PENDING");
+    expect(result!.steps).toHaveLength(0);
     expect(result!.artifacts).toHaveLength(0);
     expect(result!.govEvents).toHaveLength(0);
   });
 
-  it("returns related artifacts with correct /share links data", async () => {
+  it("includes steps ordered by stepIndex", async () => {
+    const runWithSteps = {
+      ...WF_RUN,
+      steps: [
+        { id: "step-1", stepIndex: 0, stepType: "EVALUATE", status: "COMPLETED", durationMs: 120, errorMessage: null, outputData: { status: "PASSED" } },
+        { id: "step-2", stepIndex: 1, stepType: "CRITIQUE", status: "PENDING", durationMs: null, errorMessage: null, outputData: null },
+      ],
+    };
+    vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(runWithSteps as never);
+
+    const result = await getWorkflowRunDetail("wf-1");
+
+    expect(result!.steps).toHaveLength(2);
+    expect(result!.steps[0].stepType).toBe("EVALUATE");
+    expect(result!.steps[0].status).toBe("COMPLETED");
+    expect(result!.steps[1].stepType).toBe("CRITIQUE");
+  });
+
+  it("returns related artifacts with correct relationType", async () => {
     vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(WF_RUN as never);
     vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([RELATION] as never);
     vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([ARTIFACT] as never);
@@ -111,8 +133,6 @@ describe("getWorkflowRunDetail", () => {
     expect(result!.artifacts[0].id).toBe("art-1");
     expect(result!.artifacts[0].name).toBe("AuthForm");
     expect(result!.artifacts[0].relationType).toBe("GENERATED_BY");
-    // Caller uses artifact.id to build /share/[id] href
-    expect(result!.artifacts[0].id).toBe("art-1");
   });
 
   it("filters governance events to only those matching the workflowRunId", async () => {
@@ -125,7 +145,6 @@ describe("getWorkflowRunDetail", () => {
     vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(WF_RUN as never);
     vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([RELATION] as never);
     vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([ARTIFACT] as never);
-    // Returns two events; only one matches parentId=wf-1
     vi.mocked(prisma.governanceEvent.findMany).mockResolvedValue([GOV_EVENT, otherEvent] as never);
 
     const result = await getWorkflowRunDetail("wf-1");
