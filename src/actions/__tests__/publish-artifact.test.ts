@@ -421,7 +421,7 @@ describe("publishArtifact — introspection", () => {
     expect(componentTree).toHaveProperty("type");
   });
 
-  it("componentTree root type is the root JSX element from App.tsx", async () => {
+  it("componentTree root type is JSXElement and name is the root JSX element tag", async () => {
     await publishArtifact({
       projectId: "proj-1",
       branchName: "release/v1.0",
@@ -429,9 +429,11 @@ describe("publishArtifact — introspection", () => {
     });
 
     const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
-    const { componentTree } = createCall.data as unknown as { componentTree: { type: string } };
-    // PROJECT.data has App.tsx with `return <div>Hello</div>` → root = "div"
-    expect(componentTree.type).toBe("div");
+    const { componentTree } = createCall.data as unknown as { componentTree: { type: string; name: string } };
+    // PROJECT.data has App.tsx with `return <div>Hello</div>`
+    // Real AST extraction: type="JSXElement", name is the element tag
+    expect(componentTree.type).toBe("JSXElement");
+    expect(componentTree.name).toBe("div");
   });
 
   it("includes styleSignature with colors, spacing, and classes arrays", async () => {
@@ -526,6 +528,25 @@ export default function App() {
     expect(semanticSummary).toContain("interactive");
   });
 
+  it("governance event includes usedComponentCount in details", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "DashboardHeader",
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "ARTIFACT_INTROSPECTION_GENERATED",
+          details: expect.objectContaining({
+            usedComponentCount: expect.any(Number),
+          }),
+        }),
+      })
+    );
+  });
+
   it("extractStyleSignature extracts colors from className strings only", async () => {
     vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
       ...PROJECT,
@@ -557,5 +578,132 @@ export default function App() {
     expect(styleSignature.spacing).toContain("gap-4");
     expect(styleSignature.classes).toContain("flex");
     expect(styleSignature.classes).toContain("items-center");
+  });
+});
+
+// ── Registry component & AST tests ───────────────────────────────────────────
+
+const REGISTRY_PROJECT_DATA = JSON.stringify({
+  type: "directory", name: "/", path: "/",
+  children: {
+    "App.tsx": {
+      type: "file", name: "App.tsx", path: "/App.tsx",
+      content: `import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+export default function App() {
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <Button variant="default" size="sm">Click me</Button>
+      </CardContent>
+    </Card>
+  );
+}`,
+    },
+  },
+});
+
+describe("publishArtifact — AST component tree", () => {
+  it("parses real AST — componentTree has type=JSXElement and _source", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: REGISTRY_PROJECT_DATA,
+    } as never);
+
+    await publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "CardForm" });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { componentTree } = createCall.data as unknown as {
+      componentTree: { type: string; name: string; _source: string; children: unknown[] };
+    };
+    expect(componentTree.type).toBe("JSXElement");
+    expect(componentTree.name).toBe("Card");
+    expect(componentTree._source).toBe("/App.tsx");
+  });
+
+  it("componentTree children contain nested JSX elements (depth > 0)", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: REGISTRY_PROJECT_DATA,
+    } as never);
+
+    await publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "CardForm" });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { componentTree } = createCall.data as unknown as {
+      componentTree: { children: Array<{ name: string }> };
+    };
+    // Card > CardContent > Button — so children[0].name should be CardContent
+    expect(componentTree.children.length).toBeGreaterThan(0);
+    expect(componentTree.children[0].name).toBe("CardContent");
+  });
+
+  it("extracts usedComponents from @/components imports", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: REGISTRY_PROJECT_DATA,
+    } as never);
+
+    await publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "CardForm" });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { styleSignature } = createCall.data as unknown as {
+      styleSignature: { usedComponents: string[] };
+    };
+    expect(styleSignature.usedComponents).toContain("Button");
+    expect(styleSignature.usedComponents).toContain("Card");
+    expect(styleSignature.usedComponents).toContain("CardContent");
+  });
+
+  it("propSummary contains prop names for used components", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: REGISTRY_PROJECT_DATA,
+    } as never);
+
+    await publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "CardForm" });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { styleSignature } = createCall.data as unknown as {
+      styleSignature: { propSummary: Record<string, string[]> };
+    };
+    // Button has variant and size props in the fixture
+    expect(styleSignature.propSummary["Button"]).toContain("variant");
+    expect(styleSignature.propSummary["Button"]).toContain("size");
+  });
+
+  it("graceful fallback when content is not valid JSX", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: JSON.stringify({
+        type: "directory", name: "/", path: "/",
+        children: {
+          "App.tsx": {
+            type: "file", name: "App.tsx", path: "/App.tsx",
+            content: "this is { not valid JSX }{}{][",
+          },
+        },
+      }),
+    } as never);
+
+    await publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "Broken" });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { componentTree } = createCall.data as unknown as {
+      componentTree: { _stub?: boolean };
+    };
+    // Should not throw — returns stub
+    expect(componentTree._stub).toBe(true);
+  });
+
+  it("usedComponents is empty when no @/components imports exist", async () => {
+    // PROJECT fixture has no registry imports
+    await publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "Plain" });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { styleSignature } = createCall.data as unknown as {
+      styleSignature: { usedComponents: string[] };
+    };
+    expect(styleSignature.usedComponents).toEqual([]);
   });
 });

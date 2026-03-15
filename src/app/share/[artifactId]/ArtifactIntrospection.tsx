@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Brain, ChevronDown, ChevronRight, Palette, Layers } from "lucide-react";
+import { Brain, ChevronDown, ChevronRight, Palette, Layers, Puzzle } from "lucide-react";
 
 // ── Color swatch helper ───────────────────────────────────────────────────────
 
@@ -19,31 +19,65 @@ function colorToHex(cls: string): string | null {
   return m ? (TAILWIND_HEX[m[1]] ?? null) : null;
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Component tree view ───────────────────────────────────────────────────────
 
-function CollapsibleJSON({ label, data }: { label: string; data: Record<string, unknown> }) {
-  const [open, setOpen] = useState(false);
+interface ComponentTreeNode {
+  type: string;
+  name?: string;
+  props?: Record<string, string>;
+  children?: ComponentTreeNode[];
+  _source?: string;
+  _stub?: boolean;
+}
+
+function TreeNode({ node, depth }: { node: ComponentTreeNode; depth: number }) {
+  const [open, setOpen] = useState(depth < 2);
+  const name = node.name ?? node.type ?? "?";
+  const hasChildren = (node.children ?? []).length > 0;
+  const isRegistry = /^[A-Z]/.test(name);
+  const props = Object.entries(node.props ?? {}).slice(0, 3);
+
   return (
-    <div className="rounded-lg border border-[#2a2a2a] bg-[#0c0c0c] overflow-hidden">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-neutral-400 hover:text-neutral-200 hover:bg-[#181818] transition-colors"
-        aria-expanded={open}
+    <div style={{ paddingLeft: depth > 0 ? 12 : 0 }}>
+      <div
+        className={[
+          "flex items-center gap-0.5 rounded px-1 py-0.5 font-mono text-[10px] leading-snug",
+          hasChildren ? "cursor-pointer hover:bg-[#181818]" : "",
+        ].join(" ")}
+        onClick={hasChildren ? () => setOpen((o) => !o) : undefined}
+        data-testid={depth === 0 ? "tree-node-root" : undefined}
       >
-        {open ? (
-          <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" />
+        {hasChildren ? (
+          open
+            ? <ChevronDown className="h-2.5 w-2.5 flex-shrink-0 text-neutral-600" />
+            : <ChevronRight className="h-2.5 w-2.5 flex-shrink-0 text-neutral-600" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="w-2.5 flex-shrink-0" />
         )}
-        {open ? "Hide" : "Show"} {label}
-        <span className="ml-auto text-[10px] text-neutral-600 font-mono">
-          {Object.keys(data).length} keys
+        <span className={isRegistry ? "text-violet-400" : "text-blue-400"}>
+          &lt;{name}
         </span>
-      </button>
-      {open && (
-        <pre className="px-4 py-3 text-[11px] text-neutral-300 font-mono overflow-x-auto border-t border-[#1f1f1f] leading-relaxed whitespace-pre-wrap break-words">
-          {JSON.stringify(data, null, 2)}
-        </pre>
+        {props.map(([k, v]) => (
+          <span key={k} className="text-neutral-500">
+            {" "}{k}
+            {v !== "true" && (
+              <span className="text-amber-500/80">
+                =&quot;{v.slice(0, 30)}&quot;
+              </span>
+            )}
+          </span>
+        ))}
+        {Object.keys(node.props ?? {}).length > 3 && (
+          <span className="text-neutral-600"> …</span>
+        )}
+        <span className={isRegistry ? "text-violet-400" : "text-blue-400"}>&gt;</span>
+      </div>
+      {open && hasChildren && (
+        <div>
+          {(node.children ?? []).map((child, i) => (
+            <TreeNode key={i} node={child} depth={depth + 1} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -55,6 +89,8 @@ interface StyleSignature {
   classes?: string[];
   colors?: string[];
   spacing?: string[];
+  usedComponents?: string[];
+  propSummary?: Record<string, string[]>;
 }
 
 interface Props {
@@ -64,11 +100,16 @@ interface Props {
 }
 
 export function ArtifactIntrospection({ semanticSummary, componentTree, styleSignature }: Props) {
-  const colors  = styleSignature?.colors  ?? [];
-  const spacing = styleSignature?.spacing ?? [];
-  const classes = styleSignature?.classes ?? [];
-  const hasStyle = colors.length > 0 || spacing.length > 0 || classes.length > 0;
-  if (!semanticSummary && !componentTree && !hasStyle) return null;
+  const colors         = styleSignature?.colors         ?? [];
+  const spacing        = styleSignature?.spacing        ?? [];
+  const classes        = styleSignature?.classes        ?? [];
+  const usedComponents = styleSignature?.usedComponents ?? [];
+  const propSummary    = styleSignature?.propSummary    ?? {};
+  const hasStyle       = colors.length > 0 || spacing.length > 0 || classes.length > 0;
+  const treeNode       = componentTree as ComponentTreeNode | null;
+  const hasTree        = treeNode && !treeNode._stub;
+
+  if (!semanticSummary && !hasTree && !hasStyle && usedComponents.length === 0) return null;
 
   return (
     <div className="space-y-4">
@@ -87,10 +128,57 @@ export function ArtifactIntrospection({ semanticSummary, componentTree, styleSig
         </div>
       )}
 
+      {/* Used components */}
+      {usedComponents.length > 0 && (
+        <div
+          className="rounded-lg border border-[#2a2a2a] bg-[#111111] px-4 py-3 space-y-2"
+          data-testid="used-components"
+        >
+          <p className="text-xs text-neutral-500 uppercase tracking-wider font-medium flex items-center gap-1.5">
+            <Puzzle className="h-3.5 w-3.5" />
+            Used components
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {usedComponents.map((comp) => {
+              const props = propSummary[comp];
+              return (
+                <span
+                  key={comp}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-950/40 border border-violet-800/40 text-violet-300 text-[11px] font-mono"
+                  title={props ? `props: ${props.join(", ")}` : undefined}
+                >
+                  {comp}
+                  {props && props.length > 0 && (
+                    <span className="text-violet-600 text-[9px]">
+                      ({props.slice(0, 3).join(", ")}{props.length > 3 ? "…" : ""})
+                    </span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Component tree */}
-      {componentTree && (
-        <div data-testid="component-tree">
-          <CollapsibleJSON label="component tree" data={componentTree} />
+      {hasTree && (
+        <div
+          className="rounded-lg border border-[#2a2a2a] bg-[#0c0c0c] overflow-hidden"
+          data-testid="component-tree"
+        >
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-[#1f1f1f]">
+            <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-medium">
+              Component tree
+            </span>
+            {treeNode?._source && (
+              <span className="ml-auto text-[9px] font-mono text-neutral-600">
+                {String(treeNode._source)}
+              </span>
+            )}
+          </div>
+          <div className="px-3 py-3">
+            <TreeNode node={treeNode!} depth={0} />
+          </div>
         </div>
       )}
 

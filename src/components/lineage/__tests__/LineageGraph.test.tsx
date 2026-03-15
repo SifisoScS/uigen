@@ -26,7 +26,8 @@ function makeNode(
   id: string,
   name = `Artifact ${id}`,
   semanticSummary: string | null = null,
-  firstColor: string | null = null
+  firstColor: string | null = null,
+  usedComponents: string[] = []
 ): ArtifactNode {
   return {
     id,
@@ -40,6 +41,7 @@ function makeNode(
     parentArtifactId: null,
     semanticSummary,
     firstColor,
+    usedComponents,
   };
 }
 
@@ -311,6 +313,26 @@ describe("LineageGraph", () => {
 
     const canvas = screen.getByTestId("graph-canvas");
     expect(canvas.querySelector("[data-testid='color-swatch-no-color-1']")).toBeNull();
+  });
+
+  it("renders usedComponents subtitle when node has used registry components", () => {
+    const node = makeNode("comp-1", "AuthForm", null, null, ["Button", "Card", "Input"]);
+    const data = makeData("root-uc", { children: [node] });
+    render(<LineageGraph initialData={data} currentId="root-uc" />);
+
+    const childNode = screen.getByTestId("node-comp-1");
+    expect(childNode.textContent).toContain("Used:");
+    expect(childNode.textContent).toContain("Button");
+    expect(childNode.textContent).toContain("Card");
+  });
+
+  it("does NOT render usedComponents subtitle when usedComponents is empty", () => {
+    const node = makeNode("no-comp-1", "PlainArtifact", null, null, []);
+    const data = makeData("root-nuc", { children: [node] });
+    render(<LineageGraph initialData={data} currentId="root-nuc" />);
+
+    const childNode = screen.getByTestId("node-no-comp-1");
+    expect(childNode.querySelector("[data-testid='used-components-no-comp-1']")).toBeNull();
   });
 
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {
