@@ -255,6 +255,98 @@ Key test areas:
 
 ---
 
+## 100-Repo Vision — Finish Line Roadmap
+
+UIGen's role in the 100-Repo ecosystem is to be the canonical AI-powered UI generation and evaluation node. Every phase below closes a gap between the current implementation and the full set of primitives required for cross-repo reasoning, autonomous governance, and agent evolution.
+
+### Completed phases (1–16)
+
+| Phase | Capability |
+|---|---|
+| 1–11 | Core generator, virtual FS, governance, snapshots, publish/remix, lineage, multi-agent critique |
+| 12 | Publish variant as next-generation artifact (version inheritance) |
+| 13 | Dynamic agent reputation — Laplace-smoothed `AgentReputation` table; `recordVariantOutcome` on approve/reject |
+| 14 | Reputation-weighted critique merging — `coordinateCritiques` with `WeightedSuggestion`, `topAgentName`, `CRITIQUE_MERGED_INTO` lineage relation |
+| 15 | Monaco DiffEditor conflict resolution — `resolvedContent`, auto-merge, per-file manual edits, governance event fields |
+| 16 | Semantic variant ranking & auto-selection — `scoreCritiqueSuggestions` with relevance/safety/impact scoring; auto-select button in critique panel |
+
+### Remaining phases — the 8 missing primitives
+
+#### Phase 17 — Evaluation Layer *(Missing — highest priority)*
+Introduce `EvaluationRun` for objective quality scoring, regression detection, and evaluation-gated merges.
+- **Schema:** `EvaluationRun` (id, artifactId, status PENDING|PASSED|FAILED, metrics JSON, regressionDetected, baselineArtifactId)
+- **Actions:** `evaluateArtifact`, `detectRegressions` (compare against parent artifact metrics)
+- **Gate:** `release/*` merges must pass evaluation before `publishVariantAsArtifact` proceeds
+- **Governance event:** `EVALUATION_RUN_COMPLETED`, `REGRESSION_DETECTED`
+- **Key files to create:** `src/actions/evaluate-artifact.ts`, `src/lib/evaluation/` helpers
+
+#### Phase 18 — Workflow Orchestration *(Partial — `WorkflowRun` stub exists)*
+Turn `WorkflowRun` into a live multi-step agent sequence runner.
+- **Schema:** `WorkflowStep` (id, runId, stepIndex, stepType, inputData, outputData, status, durationMs); `WorkflowDefinition` (stepsJson DAG)
+- **Executor:** traverse DAG, run each step (CRITIQUE → SCORE → GENERATE_VARIANTS → EVALUATE), support parallel/sequential scheduling
+- **Actions:** `executeWorkflowStep`, `getWorkflowStepDetail`
+- **Key existing files:** `src/actions/create-workflow-run.ts`, `src/actions/get-workflow-run-detail.ts`
+
+#### Phase 19 — Descendant Aggregation *(Missing — low schema cost)*
+Aggregate what future generations learned from an artifact.
+- **Schema:** add `descendantCount Int`, `descendantMetrics Json?` to `PublicArtifact`
+- **Actions:** `getArtifactDescendants(depth)` — recursive remix-child walk; `aggregateDescendantMetrics` — average evaluation scores, common issues, success rate across all children
+- **Integration:** surface "issues common in prior remixes" inside `MultiAgentCritiquePanel`; use descendant success rate to adjust `AgentReputation`
+- **Key existing files:** `src/actions/get-artifact-lineage.ts` (extends ancestor walk to descendants)
+
+#### Phase 20 — Event-Driven Governance *(Partial — events logged, never reacted to)*
+Add a reactive rule engine on top of the existing `GovernanceEvent` log.
+- **Schema:** `GovernanceRule` (id, eventType trigger, condition JSON, action JSON, enabled)
+- **Engine:** `processGovernanceEvent(event)` — match rules, execute actions (auto-freeze branch, auto-trigger critique, auto-demote agent, auto-reject pending merges)
+- **Built-in rules:** `EVALUATION_FAILED` → lock `release/*`; `AGENT_REPUTATION_UPDATED` score < 0.4 → demote agent; `ARTIFACT_VARIANT_PUBLISHED` → trigger descendant aggregation
+- **Key existing files:** `src/lib/governance/enforce.ts`, `src/actions/get-governance-events.ts`
+
+#### Phase 21 — Agent Specialization *(Partial — reputation is step 1)*
+Add per-category skill matrices and role assignment to enable dynamic task routing.
+- **Schema:** `AgentSkillMetric` (agentName, category e.g. "accessibility"|"performance"|"ux", score, sampleCount); `AgentRole` (agentName, role REVIEWER|AUTO_PUBLISH|RESTRICTED)
+- **Actions:** `analyzeAgentSpecializations` — compute per-category success rates from past `GovernanceEvent` outcomes; `routeCritiqueToSpecialist` — select best-matched agent for artifact type; `assignAgentRoles` — auto-promote/demote
+- **Key existing files:** `src/lib/agent-reputation.ts`, `src/actions/critique-artifact.ts`
+
+#### Phase 22 — Semantic Embeddings *(Missing)*
+Generate and store vector embeddings for similarity search, clustering, and cross-repo reasoning.
+- **Schema:** `ArtifactEmbedding` (artifactId unique, vector Float[], modelVersion, generatedAt) or pgvector column on `PublicArtifact`
+- **Actions:** `generateArtifactEmbedding` — embed `semanticSummary + componentTree + styleSignature` via embedding API; `findSimilarArtifacts(artifactId, topK)` — cosine similarity search; `clusterArtifacts` — k-means grouping
+- **Integration:** use embeddings to pre-rank critique suggestions; surface "artifacts similar to this" in registry
+- **Key existing fields:** `PublicArtifact.semanticSummary`, `PublicArtifact.componentTree`, `PublicArtifact.styleSignature`
+
+#### Phase 23 — Cross-Repo Lineage *(Missing — architecturally most complex)*
+Allow `ArtifactRelation` to reference artifacts in external repos; allow workflows to span repos.
+- **Schema:** add `externalRepoId String?`, `externalArtifactUrl String?` to `ArtifactRelation`; new `ExternalRepo` model (id, url, apiKey encrypted, lastSyncAt)
+- **Actions:** `linkExternalArtifact` — create cross-repo relation; `fetchExternalArtifact` — HTTP GET to remote registry API; `syncExternalLineage` — periodic pull to detect upstream updates
+- **Lineage walker:** extend `getArtifactLineageDeep` to follow `externalArtifactUrl` hops
+- **Key existing files:** `src/actions/get-artifact-lineage.ts`, `src/app/api/registry/route.ts`
+
+#### Phase 24 — Semantic Transform Trace *(Partial — file-level only)*
+Record AST-level structural deltas between artifact generations, not just file hashes.
+- **Schema:** `SemanticTransform` (id, fromArtifactId, toArtifactId, addedComponents [], removedComponents [], modifiedProps [], a11yDelta JSON, linesChanged Int)
+- **Actions:** `computeSemanticDelta(fromFilesData, toFilesData)` — diff component trees, extract structural changes; called inside `publishVariantAsArtifact`
+- **Integration:** surface transform trace in lineage graph; use delta to validate that a suggestion was actually applied; feed into evaluation scoring
+- **Key existing files:** `src/lib/artifact-introspection.ts` (AST helpers reusable), `src/actions/publish-variant-as-artifact.ts`
+
+---
+
+### Primitive → phase mapping
+
+| Primitive | Phase |
+|---|---|
+| Evaluation layer | 17 |
+| Workflow orchestration | 18 |
+| Descendant aggregation | 19 |
+| Event-driven governance | 20 |
+| Agent evolution (specialization) | 21 |
+| Semantic embeddings | 22 |
+| Cross-repo lineage | 23 |
+| Semantic transform trace | 24 |
+
+> **Working rule:** always run `npm run test` and `npx tsc --noEmit` before committing. Every phase must leave the test suite green and the TypeScript compiler clean.
+
+---
+
 ## Common Pitfalls
 
 1. **Do not import `src/lib/auth.ts` client-side.** It is marked `server-only` and will throw at build time.
