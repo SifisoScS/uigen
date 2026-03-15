@@ -51,6 +51,8 @@ function eventLabel(type: string): string {
     case "WORKFLOW_RUN_COMPLETED":            return "Workflow completed";
     case "DESCENDANT_METRICS_AGGREGATED":    return "Descendants aggregated";
     case "AGENT_DEMOTED":                    return "Agent demoted";
+    case "AGENT_SPECIALIZATION_ANALYZED":    return "Specialization analyzed";
+    case "AGENT_ROLE_ASSIGNED":              return "Role assigned";
     default:                                 return type;
   }
 }
@@ -83,6 +85,8 @@ function eventAccent(type: string): string {
     case "WORKFLOW_RUN_COMPLETED":            return "text-purple-400";
     case "DESCENDANT_METRICS_AGGREGATED":    return "text-teal-300";
     case "AGENT_DEMOTED":                    return "text-red-600";
+    case "AGENT_SPECIALIZATION_ANALYZED":    return "text-sky-300";
+    case "AGENT_ROLE_ASSIGNED":              return "text-violet-400";
     default:                                 return "text-neutral-400";
   }
 }

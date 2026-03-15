@@ -192,6 +192,28 @@ model AgentReputation {
   @@index([score])
 }
 
+model AgentSkillMetric {
+  id          String   @id @default(cuid())
+  agentName   String
+  category    String   // "accessibility" | "performance" | "ux" | "architecture"
+  score       Float    @default(0.5)
+  sampleCount Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([agentName, category])
+  @@index([agentName])
+  @@index([category, score])
+}
+
+model AgentRole {
+  id        String   @id @default(cuid())
+  agentName String   @unique
+  role      String   @default("REVIEWER") // REVIEWER | AUTO_PUBLISH | RESTRICTED
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+}
+
 model EvaluationRun {
   id                 String   @id @default(cuid())
   artifactId         String
