@@ -36,6 +36,8 @@ function eventLabel(type: string): string {
     case "ARTIFACT_VARIANT_APPROVED":        return "Variant approved";
     case "ARTIFACT_VARIANT_REJECTED":        return "Variant rejected";
     case "ARTIFACT_VARIANT_MERGED":          return "Variant merged";
+    case "ARTIFACT_VARIANT_CONFLICT_DETECTED": return "Conflict detected";
+    case "ARTIFACT_VARIANT_CONFLICT_RESOLVED": return "Conflict resolved";
     default:                                 return type;
   }
 }
@@ -53,6 +55,8 @@ function eventAccent(type: string): string {
     case "ARTIFACT_VARIANT_APPROVED":        return "text-emerald-400";
     case "ARTIFACT_VARIANT_REJECTED":        return "text-red-400";
     case "ARTIFACT_VARIANT_MERGED":          return "text-emerald-300";
+    case "ARTIFACT_VARIANT_CONFLICT_DETECTED": return "text-amber-400";
+    case "ARTIFACT_VARIANT_CONFLICT_RESOLVED": return "text-emerald-400";
     default:                                 return "text-neutral-400";
   }
 }

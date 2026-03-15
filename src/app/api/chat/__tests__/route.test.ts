@@ -192,6 +192,7 @@ describe("POST /api/chat", () => {
         approvedBy: null,
         mergedFromVariantId: null,
         mergedAt: null,
+        conflictResolvedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

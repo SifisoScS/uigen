@@ -111,6 +111,8 @@ export interface VariantNode {
   status: string;
   /** True when this variant has been merged back into the original project. */
   isMerged: boolean;
+  /** Set when a conflict was detected and resolved before the merge completed. */
+  conflictResolvedAt: Date | null;
   createdAt: Date;
 }
 
@@ -302,7 +304,7 @@ export async function getArtifactLineageDeep(
   // 5. Fetch original project's merge state (which variant was last merged in)
   const originalProject = await prisma.project.findUnique({
     where: { id: currentRaw.projectId },
-    select: { mergedFromVariantId: true },
+    select: { mergedFromVariantId: true, conflictResolvedAt: true },
   });
 
   // 6. Fetch variant Projects linked via NEW_VARIANT_OF relations
@@ -326,12 +328,14 @@ export async function getArtifactLineageDeep(
       // Extract suggestion hint from project name (after " — ")
       const dashIdx = project.name.indexOf(" — ");
       const suggestion = dashIdx !== -1 ? project.name.slice(dashIdx + 3) : null;
+      const isMerged = originalProject?.mergedFromVariantId === project.id;
       variants.push({
         id: project.id,
         name: project.name,
         suggestion,
         status: project.status,
-        isMerged: originalProject?.mergedFromVariantId === project.id,
+        isMerged,
+        conflictResolvedAt: isMerged ? (originalProject?.conflictResolvedAt ?? null) : null,
         createdAt: project.createdAt,
       });
     }
