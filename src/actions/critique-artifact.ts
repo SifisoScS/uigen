@@ -13,7 +13,7 @@ const critiqueSchema = z.object({
   suggestions: z.array(z.string()).describe("Actionable improvement suggestions"),
 });
 
-// ── Default stub critique (used when ANTHROPIC_API_KEY is absent) ──────────────
+// ── Default stub critiques ─────────────────────────────────────────────────────
 
 const DEFAULT_CRITIQUE = {
   suggestions: [
@@ -26,6 +26,29 @@ const DEFAULT_CRITIQUE = {
     "Potential color contrast issues in dark mode",
   ],
 };
+
+/** Stub critique returned for the Grok agent (no external API available). */
+const GROK_DEFAULT_CRITIQUE = {
+  suggestions: [
+    "Replace custom dropdown with shadcn Select for keyboard support",
+    "Add loading state to async buttons using disabled + spinner pattern",
+    "Use semantic HTML elements (button vs div) for interactive controls",
+  ],
+  issues: [
+    "Custom dropdown lacks aria-expanded attribute",
+    "Button click handlers missing keyboard event support",
+  ],
+};
+
+// ── Aggregated critique type (exported for UI consumption) ───────────────────
+
+export interface AggregatedCritique {
+  agentName: string;
+  issues: string[];
+  suggestions: string[];
+  priority: number;
+  invocationId: string;
+}
 
 // ── Prompt builder ────────────────────────────────────────────────────────────
 
@@ -47,16 +70,52 @@ function buildCritiquePrompt(
   return lines.join("\n");
 }
 
+// ── Per-agent critique runner ─────────────────────────────────────────────────
+
+/** Run a critique for a single named agent. Grok is always a stub. */
+async function runAgentCritique(
+  agentName: string,
+  prompt: string,
+  apiKey: string | undefined,
+): Promise<{ issues: string[]; suggestions: string[] }> {
+  // Grok is always a stub — no external Grok API wired
+  if (agentName === "Grok") {
+    return GROK_DEFAULT_CRITIQUE;
+  }
+
+  // Claude — use real LLM when API key is present
+  if (apiKey && apiKey.trim() !== "") {
+    try {
+      const { object } = await generateObject({
+        model: anthropic("claude-sonnet-4-6"),
+        schema: critiqueSchema,
+        prompt,
+      });
+      return object;
+    } catch {
+      // LLM call failed — keep DEFAULT_CRITIQUE
+    }
+  }
+
+  return DEFAULT_CRITIQUE;
+}
+
 // ── Action ────────────────────────────────────────────────────────────────────
 
 export async function critiqueArtifact({
   artifactId,
   agentName = "StubAgent",
   prompt,
+  agents,
 }: {
   artifactId: string;
   agentName?: string;
   prompt?: string;
+  /**
+   * When provided, runs a parallel multi-agent critique (no auto-variant creation).
+   * Each element is an agent name; "Claude" uses the real LLM, "Grok" is a stub.
+   */
+  agents?: string[];
 }) {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
@@ -76,7 +135,6 @@ export async function critiqueArtifact({
   });
   if (!artifact) throw new Error("Artifact not found");
 
-  // 2. Build critique prompt from introspection data
   const critiquePrompt =
     prompt ??
     buildCritiquePrompt(
@@ -86,9 +144,76 @@ export async function critiqueArtifact({
       artifact.styleSignature,
     );
 
-  // 3. Generate critique — real LLM when API key present, stub fallback otherwise
-  let critiqueJson: { issues: string[]; suggestions: string[] } = DEFAULT_CRITIQUE;
   const apiKey = process.env.ANTHROPIC_API_KEY;
+
+  // ── Multi-agent mode ───────────────────────────────────────────────────────
+
+  if (agents && agents.length > 0) {
+    // Run all agent critiques in parallel
+    const critiqueResults = await Promise.all(
+      agents.map((name) => runAgentCritique(name, critiquePrompt, apiKey))
+    );
+
+    // Persist one AgentInvocation per agent and collect aggregated critiques
+    const aggregatedCritiques: AggregatedCritique[] = [];
+
+    for (let i = 0; i < agents.length; i++) {
+      const name = agents[i];
+      const result = critiqueResults[i];
+
+      const invocation = await prisma.agentInvocation.create({
+        data: {
+          agentName: name,
+          prompt: critiquePrompt,
+          critiqueJson: result,
+        },
+      });
+
+      await prisma.artifactRelation.create({
+        data: {
+          parentType: "AgentInvocation",
+          parentId: invocation.id,
+          childType: "PublicArtifact",
+          childId: artifactId,
+          relationType: "EVALUATED_BY",
+        },
+      });
+
+      await prisma.governanceEvent.create({
+        data: {
+          projectId: artifact.projectId,
+          type: "ARTIFACT_CRITIQUE_CREATED",
+          actor: name.toLowerCase(),
+          details: {
+            parentType: "AgentInvocation",
+            parentId: invocation.id,
+            childId: artifactId,
+            relationType: "EVALUATED_BY",
+            agentName: name,
+          },
+        },
+      });
+
+      aggregatedCritiques.push({
+        agentName: name,
+        issues: result.issues,
+        suggestions: result.suggestions,
+        priority: i + 1, // 1-indexed; first agent = highest priority
+        invocationId: invocation.id,
+      });
+    }
+
+    // In multi-agent mode: no auto-variant creation — user selects via generateSelectedVariants
+    return {
+      invocationId: aggregatedCritiques[0]?.invocationId ?? "",
+      variantIds: [] as string[],
+      aggregatedCritiques,
+    };
+  }
+
+  // ── Single-agent mode (backward-compatible) ────────────────────────────────
+
+  let critiqueJson: { issues: string[]; suggestions: string[] } = DEFAULT_CRITIQUE;
   if (apiKey && apiKey.trim() !== "") {
     try {
       const { object } = await generateObject({
@@ -102,7 +227,6 @@ export async function critiqueArtifact({
     }
   }
 
-  // 4. Create AgentInvocation record
   const invocation = await prisma.agentInvocation.create({
     data: {
       agentName,
@@ -111,7 +235,6 @@ export async function critiqueArtifact({
     },
   });
 
-  // 5. Cross-artifact relation: AgentInvocation → PublicArtifact (EVALUATED_BY)
   await prisma.artifactRelation.create({
     data: {
       parentType: "AgentInvocation",
@@ -122,7 +245,6 @@ export async function critiqueArtifact({
     },
   });
 
-  // 6. Governance event for the critique
   await prisma.governanceEvent.create({
     data: {
       projectId: artifact.projectId,
@@ -138,7 +260,7 @@ export async function critiqueArtifact({
     },
   });
 
-  // 7. Auto-variant generation: one Project stub per suggestion
+  // Auto-variant generation: one Project stub per suggestion
   const variantIds: string[] = [];
   for (const suggestion of critiqueJson.suggestions) {
     const variant = await prisma.project.create({
@@ -174,5 +296,9 @@ export async function critiqueArtifact({
     variantIds.push(variant.id);
   }
 
-  return { invocationId: invocation.id, variantIds };
+  return {
+    invocationId: invocation.id,
+    variantIds,
+    aggregatedCritiques: [] as AggregatedCritique[],
+  };
 }

@@ -279,3 +279,76 @@ describe("critiqueArtifact", () => {
     );
   });
 });
+
+// ── Multi-agent mode ───────────────────────────────────────────────────────────
+
+describe("critiqueArtifact (multi-agent mode)", () => {
+  it("creates one AgentInvocation per agent when agents array is provided", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    // Two agents → two invocations
+    expect(prisma.agentInvocation.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns aggregatedCritiques with one entry per agent in order", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    expect(result.aggregatedCritiques).toHaveLength(2);
+    expect(result.aggregatedCritiques[0].agentName).toBe("Claude");
+    expect(result.aggregatedCritiques[1].agentName).toBe("Grok");
+  });
+
+  it("assigns priority 1 to first agent and 2 to second agent", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    expect(result.aggregatedCritiques[0].priority).toBe(1);
+    expect(result.aggregatedCritiques[1].priority).toBe(2);
+  });
+
+  it("does NOT auto-create variant Projects in multi-agent mode", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    expect(prisma.project.create).not.toHaveBeenCalled();
+  });
+
+  it("returns empty variantIds array in multi-agent mode", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    expect(result.variantIds).toHaveLength(0);
+  });
+
+  it("logs ARTIFACT_CRITIQUE_CREATED governance event per agent", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    // One event per agent = 2 total
+    const critiqueCalls = vi
+      .mocked(prisma.governanceEvent.create)
+      .mock.calls.filter(
+        ([args]) =>
+          (args as { data: { type: string } }).data.type === "ARTIFACT_CRITIQUE_CREATED"
+      );
+    expect(critiqueCalls).toHaveLength(2);
+  });
+
+  it("uses Grok stub suggestions even when ANTHROPIC_API_KEY is absent", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Grok"],
+    });
+
+    expect(result.aggregatedCritiques[0].agentName).toBe("Grok");
+    expect(result.aggregatedCritiques[0].suggestions.length).toBeGreaterThan(0);
+    expect(generateObject).not.toHaveBeenCalled();
+  });
+});
