@@ -2,7 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { applyResolutions, buildNestedFS, type Resolution } from "@/lib/virtual-fs-utils";
+import { applyResolutions, buildNestedFS, detectConflicts, type Resolution } from "@/lib/virtual-fs-utils";
 
 /**
  * Apply per-file conflict resolutions and complete the variant merge.
@@ -63,6 +63,7 @@ export async function resolveVariantConflict({
   if (!originalProject) throw new Error("Original project not found");
 
   // 5. Apply resolutions → build merged file system
+  const conflicts = detectConflicts(originalProject.data, variant.data);
   const mergedFiles = applyResolutions(originalProject.data, variant.data, resolutions);
   const mergedTree = buildNestedFS(mergedFiles);
   const mergedData = JSON.stringify(mergedTree);
@@ -92,7 +93,13 @@ export async function resolveVariantConflict({
         originalArtifactId,
         originalProjectId: artifact.projectId,
         resolutionCount: resolutions.length,
-        resolutions: resolutions.map((r) => ({ path: r.path, choice: r.choice })),
+        conflictedFilesCount: conflicts.length,
+        resolvedFilesCount: resolutions.length,
+        resolutions: resolutions.map((r) => ({
+          path: r.path,
+          choice: r.choice,
+          hasManualEdit: r.resolvedContent !== undefined,
+        })),
       },
     },
   });

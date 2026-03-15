@@ -215,6 +215,58 @@ describe("resolveVariantConflict", () => {
     );
   });
 
+  it("applies resolvedContent directly when present (overrides choice)", async () => {
+    await resolveVariantConflict({
+      originalArtifactId: "art-1",
+      variantProjectId: "proj-var-1",
+      resolutions: [{ path: "/App.tsx", resolvedContent: "manually edited content" }],
+    });
+
+    const updateCall = vi.mocked(prisma.project.update).mock.calls[0][0];
+    const mergedData = JSON.parse((updateCall as { data: { data: string } }).data.data);
+    const appFile = mergedData?.children?.["App.tsx"];
+    expect(appFile?.content).toBe("manually edited content");
+  });
+
+  it("includes conflictedFilesCount and resolvedFilesCount in governance event details", async () => {
+    await resolveVariantConflict({
+      originalArtifactId: "art-1",
+      variantProjectId: "proj-var-1",
+      resolutions: [{ path: "/App.tsx", choice: "variant" }],
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          details: expect.objectContaining({
+            conflictedFilesCount: 1,
+            resolvedFilesCount: 1,
+          }),
+        }),
+      })
+    );
+  });
+
+  it("marks hasManualEdit=true in governance event when resolvedContent is provided", async () => {
+    await resolveVariantConflict({
+      originalArtifactId: "art-1",
+      variantProjectId: "proj-var-1",
+      resolutions: [{ path: "/App.tsx", resolvedContent: "custom edit" }],
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          details: expect.objectContaining({
+            resolutions: expect.arrayContaining([
+              expect.objectContaining({ path: "/App.tsx", hasManualEdit: true }),
+            ]),
+          }),
+        }),
+      })
+    );
+  });
+
   it("returns { mergedAt, conflictResolvedAt } as Dates", async () => {
     const result = await resolveVariantConflict({
       originalArtifactId: "art-1",

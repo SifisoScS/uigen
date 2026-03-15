@@ -13,7 +13,14 @@ export interface ConflictingFile {
 
 export type Resolution = {
   path: string;
-  choice: "original" | "variant";
+  /** Kept for backward-compat with existing callers that use pick-one-side semantics. */
+  choice?: "original" | "variant";
+  /**
+   * When present (e.g. from a Monaco editor), used as the final file content
+   * directly — overrides `choice`. Enables manual edits beyond the original /
+   * variant binary choice.
+   */
+  resolvedContent?: string;
 };
 
 // ── Tree traversal ────────────────────────────────────────────────────────────
@@ -147,8 +154,8 @@ export function applyResolutions(
   const variantMap = new Map<string, string>(
     variantFiles.map((f) => [f.path, f.content])
   );
-  const resolutionMap = new Map<string, "original" | "variant">(
-    resolutions.map((r) => [r.path, r.choice])
+  const resolutionMap = new Map<string, Resolution>(
+    resolutions.map((r) => [r.path, r])
   );
 
   // Start with original files
@@ -162,7 +169,11 @@ export function applyResolutions(
       merged.set(path, variantContent);
     } else if (originalContent !== variantContent) {
       // Conflict → apply resolution (default: keep original)
-      if ((resolutionMap.get(path) ?? "original") === "variant") {
+      const resolution = resolutionMap.get(path);
+      if (resolution?.resolvedContent !== undefined) {
+        // Manual edit from Monaco editor takes priority
+        merged.set(path, resolution.resolvedContent);
+      } else if ((resolution?.choice ?? "original") === "variant") {
         merged.set(path, variantContent);
       }
     }
