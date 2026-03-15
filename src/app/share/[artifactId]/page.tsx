@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Package, Tag, GitBranch, Calendar, User, GitFork, Workflow, Database, Layers } from "lucide-react";
+import { Package, Tag, GitBranch, Calendar, User, GitFork, Workflow, Database, Layers, GitMerge } from "lucide-react";
 import { RemixButton } from "./RemixButton";
 import { ManifestViewer } from "./ManifestViewer";
 import { AncestryChain } from "@/components/AncestryChain";
@@ -56,6 +56,7 @@ export default async function SharePage({
   ]);
   const crossParents = deep?.crossParents ?? [];
   const variants = deep?.variants ?? [];
+  const mergedVariant = variants.find((v) => v.isMerged) ?? null;
   const tags = Array.isArray(manifest.registryTags)
     ? (manifest.registryTags as string[])
     : [];
@@ -208,6 +209,25 @@ export default async function SharePage({
           </div>
         )}
 
+        {/* Merged variant banner */}
+        {mergedVariant && (
+          <div
+            data-testid="merged-variant-banner"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-emerald-800/30 bg-emerald-950/10 text-xs text-emerald-400"
+          >
+            <GitMerge className="h-3.5 w-3.5 flex-shrink-0" />
+            <span>
+              Merged from variant:{" "}
+              <a
+                href={`/${mergedVariant.id}`}
+                className="underline underline-offset-2 hover:text-emerald-300 transition-colors"
+              >
+                {mergedVariant.suggestion ?? mergedVariant.name}
+              </a>
+            </span>
+          </div>
+        )}
+
         {/* Variant Projects (auto-generated from critique suggestions) */}
         {variants.length > 0 && (
           <section aria-label="Variant Projects" data-testid="variants-section">
@@ -223,9 +243,11 @@ export default async function SharePage({
                 <VariantApprovalCard
                   key={v.id}
                   variantId={v.id}
+                  originalArtifactId={artifactId}
                   suggestion={v.suggestion}
                   variantName={v.name}
                   initialStatus={v.status}
+                  initialIsMerged={v.isMerged}
                 />
               ))}
             </div>

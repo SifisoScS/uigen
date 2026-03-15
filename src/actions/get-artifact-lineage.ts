@@ -71,6 +71,7 @@ const DEEP_SELECT = {
   manifest: true,
   semanticSummary: true,
   styleSignature: true,
+  projectId: true,
 } as const;
 
 /** Full node shape used by the lineage graph viewer. */
@@ -108,6 +109,8 @@ export interface VariantNode {
   suggestion: string | null;
   /** Approval status: "DRAFT" | "APPROVED" | "REJECTED" */
   status: string;
+  /** True when this variant has been merged back into the original project. */
+  isMerged: boolean;
   createdAt: Date;
 }
 
@@ -138,6 +141,7 @@ type RawDeep = {
   manifest: unknown;
   semanticSummary: string | null;
   styleSignature: unknown;
+  projectId: string;
 };
 
 function extractPolicyType(manifest: unknown): string | null {
@@ -295,7 +299,13 @@ export async function getArtifactLineageDeep(
     }
   }
 
-  // 5. Fetch variant Projects linked via NEW_VARIANT_OF relations
+  // 5. Fetch original project's merge state (which variant was last merged in)
+  const originalProject = await prisma.project.findUnique({
+    where: { id: currentRaw.projectId },
+    select: { mergedFromVariantId: true },
+  });
+
+  // 6. Fetch variant Projects linked via NEW_VARIANT_OF relations
   const variantRelations = await prisma.artifactRelation.findMany({
     where: {
       parentType: "PublicArtifact",
@@ -321,6 +331,7 @@ export async function getArtifactLineageDeep(
         name: project.name,
         suggestion,
         status: project.status,
+        isMerged: originalProject?.mergedFromVariantId === project.id,
         createdAt: project.createdAt,
       });
     }

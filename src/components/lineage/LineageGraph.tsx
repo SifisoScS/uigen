@@ -44,6 +44,7 @@ interface Edge {
   key: string;
   dashed?: boolean;
   variant?: boolean;
+  merged?: boolean;
 }
 
 interface Layout {
@@ -167,7 +168,7 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
     y: currentY + i * (NODE_H + V_GAP / 2),
   }));
 
-  // Edges: current → variants (dashed gray, horizontal-ish)
+  // Edges: current → variants (dashed, horizontal-ish; solid green if merged)
   for (const v of variantNodes) {
     edges.push({
       fromX: currentNode.x + NODE_W,
@@ -175,8 +176,9 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
       toX: v.x,
       toY: v.y + NODE_H / 2,
       key: `variant-${currentId}->${v.id}`,
-      dashed: true,
+      dashed: !v.isMerged,
       variant: true,
+      merged: v.isMerged,
     });
   }
 
@@ -498,7 +500,7 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                 y1={edge.fromY}
                 x2={edge.toX}
                 y2={edge.variant ? edge.toY : edge.toY - 5}
-                stroke={edge.variant ? "#3a3a3a" : edge.dashed ? "#4a3a1a" : "#2a2a2a"}
+                stroke={edge.merged ? "#10b981" : edge.variant ? "#3a3a3a" : edge.dashed ? "#4a3a1a" : "#2a2a2a"}
                 strokeWidth={1.5}
                 strokeDasharray={edge.dashed || edge.variant ? "5 3" : undefined}
                 markerEnd={edge.variant ? undefined : "url(#lg-arrow)"}
@@ -592,20 +594,27 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
           {layout.variantNodes.map((v) => {
             const isApproved = v.status === "APPROVED";
             const isRejected = v.status === "REJECTED";
+            const isMerged = v.isMerged;
 
-            const borderClass = isApproved
+            const borderClass = isMerged
+              ? "border-emerald-600/60 hover:border-emerald-500/70"
+              : isApproved
               ? "border-emerald-700/50 hover:border-emerald-600/70"
               : isRejected
               ? "border-red-900/40 hover:border-red-800/50"
               : "border-[#3a3a3a] hover:border-[#4a4a4a]";
 
-            const textClass = isApproved
+            const textClass = isMerged
+              ? "text-emerald-300/80"
+              : isApproved
               ? "text-neutral-300"
               : isRejected
               ? "text-neutral-600 line-through"
               : "text-neutral-500";
 
-            const statusBadge = isApproved
+            const statusBadge = isMerged
+              ? { label: "⇢ MERGED", cls: "text-emerald-500 bg-emerald-950/60 border-emerald-700/40" }
+              : isApproved
               ? { label: "✓ APPR", cls: "text-emerald-600 bg-emerald-950/60 border-emerald-800/40" }
               : isRejected
               ? { label: "✕ REJ", cls: "text-red-700 bg-red-950/60 border-red-800/40" }
