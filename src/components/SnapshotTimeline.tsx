@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   History, RotateCcw, GitFork, Loader2, RefreshCw,
-  GitCompare, Pin, PinOff, GitBranch, X, Plus, Tag, GitMerge,
+  GitCompare, GitCompareArrows, Pin, PinOff, GitBranch, X, Plus, Tag, GitMerge,
 } from "lucide-react";
 import { branchColor, branchColorBg } from "@/lib/branch-colors";
 import { toast } from "sonner";
@@ -396,64 +396,59 @@ export function SnapshotTimeline({ projectId, generationCount }: SnapshotTimelin
                 </div>
 
                 {/* Hover actions */}
-                <div className="flex items-center gap-1 flex-wrap opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleRestore(snap.id)}
                     disabled={mutationBlocked}
                     className={cn(
-                      "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                      "flex items-center justify-center w-6 h-6 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                       isRestoringThis
                         ? "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
-                        : "bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e]"
+                        : "text-neutral-500 hover:text-neutral-200 hover:bg-[#2e2e2e]"
                     )}
-                    title={policyBlockReason ?? (isRestoringThis ? "Click again to confirm" : "Restore to this checkpoint")}
+                    title={policyBlockReason ?? (isRestoringThis ? "Click again to confirm restore" : "Restore to this checkpoint")}
                   >
-                    <RotateCcw className="h-2.5 w-2.5" />
-                    {isRestoringThis ? "Confirm?" : "Restore"}
+                    <RotateCcw className="h-3 w-3" />
                   </button>
 
                   <button
                     onClick={() => handleFork(snap)}
                     disabled={isForkingThis || mutationBlocked}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center w-6 h-6 rounded text-neutral-500 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     title={policyBlockReason ?? "Fork project from this checkpoint"}
                   >
-                    {isForkingThis ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <GitFork className="h-2.5 w-2.5" />}
-                    Fork
+                    {isForkingThis ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitFork className="h-3 w-3" />}
                   </button>
 
                   <button
                     onClick={() => setDiffSpec({ beforeId: snap.id, beforeLabel: displayName(snap), afterTarget: "current", afterLabel: "Current" })}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors"
+                    className="flex items-center justify-center w-6 h-6 rounded text-neutral-500 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors"
                     title="Compare this checkpoint to the current state"
                   >
-                    <GitCompare className="h-2.5 w-2.5" />
-                    vs. now
+                    <GitCompare className="h-3 w-3" />
                   </button>
 
                   {prevSnap && (
                     <button
                       onClick={() => setDiffSpec({ beforeId: prevSnap.id, beforeLabel: displayName(prevSnap), afterTarget: snap.id, afterLabel: displayName(snap) })}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors"
+                      className="flex items-center justify-center w-6 h-6 rounded text-neutral-500 hover:text-neutral-200 hover:bg-[#2e2e2e] transition-colors"
                       title="Compare this checkpoint to the previous one"
                     >
-                      <GitCompare className="h-2.5 w-2.5" />
-                      vs. prev
+                      <GitCompareArrows className="h-3 w-3" />
                     </button>
                   )}
 
                   <button
                     onClick={() => handleTogglePin(snap)}
                     className={cn(
-                      "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                      "flex items-center justify-center w-6 h-6 rounded transition-colors",
                       snap.pinned
-                        ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                        : "bg-[#252525] text-neutral-400 hover:text-neutral-200 hover:bg-[#2e2e2e]"
+                        ? "text-amber-400 hover:bg-amber-500/20"
+                        : "text-neutral-500 hover:text-neutral-200 hover:bg-[#2e2e2e]"
                     )}
                     title={snap.pinned ? "Unpin checkpoint" : "Pin to top"}
                   >
-                    {snap.pinned ? <PinOff className="h-2.5 w-2.5" /> : <Pin className="h-2.5 w-2.5" />}
-                    {snap.pinned ? "Unpin" : "Pin"}
+                    {snap.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
                   </button>
                 </div>
               </div>
