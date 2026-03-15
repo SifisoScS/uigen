@@ -13,6 +13,7 @@ vi.mock("@monaco-editor/react", () => ({
       const fakeModifiedEditor = {
         getValue: vi.fn(() => "edited content"),
         setValue: vi.fn(),
+        onDidChangeModelContent: vi.fn(),
       };
       onMount({ getModifiedEditor: () => fakeModifiedEditor });
     }

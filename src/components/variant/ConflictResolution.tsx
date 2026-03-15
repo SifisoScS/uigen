@@ -153,10 +153,13 @@ export function ConflictResolution({
                   wordWrap: "on",
                 }}
                 onMount={(diffEditor) => {
-                  editorRefs.current[file.path] = diffEditor.getModifiedEditor() as MonacoModifiedEditor;
-                }}
-                onChange={() => {
-                  setChoices((prev) => ({ ...prev, [file.path]: "manual" }));
+                  const modifiedEditor = diffEditor.getModifiedEditor() as MonacoModifiedEditor;
+                  editorRefs.current[file.path] = modifiedEditor;
+                  // Track manual edits via the underlying editor model
+                  (modifiedEditor as unknown as { onDidChangeModelContent: (cb: () => void) => void })
+                    .onDidChangeModelContent(() => {
+                      setChoices((prev) => ({ ...prev, [file.path]: "manual" }));
+                    });
                 }}
               />
             </div>
