@@ -124,6 +124,19 @@ export async function publishVariantAsArtifact({
     throw new Error("Unauthorized");
   }
 
+  // 6b. Evaluation gate — block if the most recent EvaluationRun for this
+  //     artifact explicitly FAILED (no evaluation = allowed for backwards compat)
+  const latestEval = await prisma.evaluationRun.findFirst({
+    where: { artifactId: originalArtifactId },
+    orderBy: { createdAt: "desc" },
+    select: { status: true },
+  });
+  if (latestEval?.status === "FAILED") {
+    throw new Error(
+      "Artifact has a failed evaluation run — resolve regressions before publishing"
+    );
+  }
+
   // 7. Determine filesData source
   const filesData = originalProject.conflictResolvedAt !== null
     ? originalProject.data    // conflict-resolved: merged tree written to original project

@@ -147,6 +147,21 @@ model AgentReputation {
   @@index([score])
 }
 
+model EvaluationRun {
+  id                 String   @id @default(cuid())
+  artifactId         String
+  status             String   @default("PENDING") // PENDING | PASSED | FAILED
+  metrics            Json
+  regressionDetected Boolean  @default(false)
+  baselineArtifactId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([artifactId])
+  @@index([status])
+  @@index([artifactId, createdAt])
+}
+
 model PublicArtifact {
   id               String    @id @default(cuid())
   projectId        String
