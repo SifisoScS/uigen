@@ -214,6 +214,17 @@ model AgentRole {
   @@index([role])
 }
 
+model ArtifactEmbedding {
+  id           String   @id @default(cuid())
+  artifactId   String   @unique
+  vector       Float[]
+  modelVersion String   @default("stub-v1")
+  generatedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([artifactId])
+}
+
 model EvaluationRun {
   id                 String   @id @default(cuid())
   artifactId         String

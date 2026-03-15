@@ -53,6 +53,7 @@ function eventLabel(type: string): string {
     case "AGENT_DEMOTED":                    return "Agent demoted";
     case "AGENT_SPECIALIZATION_ANALYZED":    return "Specialization analyzed";
     case "AGENT_ROLE_ASSIGNED":              return "Role assigned";
+    case "ARTIFACT_EMBEDDING_GENERATED":     return "Embedding generated";
     default:                                 return type;
   }
 }
@@ -87,6 +88,7 @@ function eventAccent(type: string): string {
     case "AGENT_DEMOTED":                    return "text-red-600";
     case "AGENT_SPECIALIZATION_ANALYZED":    return "text-sky-300";
     case "AGENT_ROLE_ASSIGNED":              return "text-violet-400";
+    case "ARTIFACT_EMBEDDING_GENERATED":     return "text-fuchsia-400";
     default:                                 return "text-neutral-400";
   }
 }
