@@ -2,13 +2,26 @@
 
 import { prisma } from "@/lib/prisma";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 export interface WorkflowRunDetail {
   id: string;
   name: string;
   description: string | null;
   outputSummary: string | null;
   inputData: Record<string, unknown> | null;
+  status: string;
   createdAt: Date;
+}
+
+export interface WorkflowStepSummary {
+  id: string;
+  stepIndex: number;
+  stepType: string;
+  status: string;
+  durationMs: number | null;
+  errorMessage: string | null;
+  outputData: Record<string, unknown> | null;
 }
 
 export interface RelatedArtifact {
@@ -33,9 +46,12 @@ export interface WorkflowRunGovernanceEvent {
 
 export interface WorkflowRunPageData {
   run: WorkflowRunDetail;
+  steps: WorkflowStepSummary[];
   artifacts: RelatedArtifact[];
   govEvents: WorkflowRunGovernanceEvent[];
 }
+
+// ── Action ────────────────────────────────────────────────────────────────────
 
 export async function getWorkflowRunDetail(
   id: string
@@ -48,11 +64,29 @@ export async function getWorkflowRunDetail(
       description: true,
       outputSummary: true,
       inputData: true,
+      status: true,
       createdAt: true,
+      steps: {
+        select: {
+          id: true,
+          stepIndex: true,
+          stepType: true,
+          status: true,
+          durationMs: true,
+          errorMessage: true,
+          outputData: true,
+        },
+        orderBy: { stepIndex: "asc" },
+      },
     },
   });
 
   if (!run) return null;
+
+  const steps: WorkflowStepSummary[] = run.steps.map((s) => ({
+    ...s,
+    outputData: s.outputData as Record<string, unknown> | null,
+  }));
 
   // Resolve artifact children via ArtifactRelation
   const relations = await prisma.artifactRelation.findMany({
@@ -107,6 +141,7 @@ export async function getWorkflowRunDetail(
 
   return {
     run: { ...run, inputData: run.inputData as Record<string, unknown> | null },
+    steps,
     artifacts,
     govEvents,
   };

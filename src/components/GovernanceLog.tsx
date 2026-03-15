@@ -45,6 +45,10 @@ function eventLabel(type: string): string {
     case "ARTIFACT_SUGGESTIONS_SCORED":        return "Suggestions scored";
     case "EVALUATION_RUN_COMPLETED":           return "Evaluation completed";
     case "REGRESSION_DETECTED":               return "Regression detected";
+    case "WORKFLOW_STEP_STARTED":             return "Step started";
+    case "WORKFLOW_STEP_COMPLETED":           return "Step completed";
+    case "WORKFLOW_STEP_FAILED":              return "Step failed";
+    case "WORKFLOW_RUN_COMPLETED":            return "Workflow completed";
     default:                                 return type;
   }
 }
@@ -71,6 +75,10 @@ function eventAccent(type: string): string {
     case "ARTIFACT_SUGGESTIONS_SCORED":        return "text-teal-400";
     case "EVALUATION_RUN_COMPLETED":           return "text-cyan-400";
     case "REGRESSION_DETECTED":               return "text-red-500";
+    case "WORKFLOW_STEP_STARTED":             return "text-neutral-400";
+    case "WORKFLOW_STEP_COMPLETED":           return "text-emerald-400";
+    case "WORKFLOW_STEP_FAILED":              return "text-red-400";
+    case "WORKFLOW_RUN_COMPLETED":            return "text-purple-400";
     default:                                 return "text-neutral-400";
   }
 }

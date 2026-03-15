@@ -112,14 +112,45 @@ model AgentInvocation {
 }
 
 model WorkflowRun {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String
   description   String?
   workflowId    String?
   inputData     Json?
   outputSummary String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  status        String         @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  steps         WorkflowStep[]
+
+  @@index([status])
+}
+
+model WorkflowStep {
+  id           String      @id @default(cuid())
+  runId        String
+  stepIndex    Int
+  stepType     String      // EVALUATE | CRITIQUE | SCORE | GENERATE_VARIANTS
+  inputData    Json?
+  outputData   Json?
+  status       String      @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  durationMs   Int?
+  errorMessage String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  run          WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([runId, stepIndex])
+}
+
+model WorkflowDefinition {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  stepsJson   Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model ArtifactRelation {
