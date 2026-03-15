@@ -352,3 +352,91 @@ describe("critiqueArtifact (multi-agent mode)", () => {
     expect(generateObject).not.toHaveBeenCalled();
   });
 });
+
+// ── Ranking & scoring heuristics ───────────────────────────────────────────────
+
+const { AGENT_REPUTATION } = await import("../critique-artifact");
+
+describe("critiqueArtifact (ranking heuristics)", () => {
+  it("attaches finalScore to each AggregatedCritique", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    for (const c of result.aggregatedCritiques) {
+      expect(typeof c.finalScore).toBe("number");
+      expect(c.finalScore).toBeGreaterThan(0);
+    }
+  });
+
+  it("Claude finalScore equals reputation / priority (0.9 / 1 = 0.9)", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    const claude = result.aggregatedCritiques.find((c) => c.agentName === "Claude")!;
+    expect(claude.finalScore).toBeCloseTo(0.9, 4);
+  });
+
+  it("Grok finalScore equals reputation / priority (0.85 / 2 = 0.425)", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    const grok = result.aggregatedCritiques.find((c) => c.agentName === "Grok")!;
+    expect(grok.finalScore).toBeCloseTo(0.425, 4);
+  });
+
+  it("aggregatedCritiques are sorted by finalScore descending (Claude before Grok)", async () => {
+    const result = await critiqueArtifact({
+      artifactId: "art-1",
+      agents: ["Claude", "Grok"],
+    });
+
+    const scores = result.aggregatedCritiques.map((c) => c.finalScore);
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i - 1]).toBeGreaterThanOrEqual(scores[i]);
+    }
+    expect(result.aggregatedCritiques[0].agentName).toBe("Claude");
+  });
+
+  it("Claude scores higher than Grok at equal priority (reputation comparison)", () => {
+    const claudeScore = AGENT_REPUTATION["Claude"] / 1;
+    const grokScore = AGENT_REPUTATION["Grok"] / 1;
+    expect(claudeScore).toBeGreaterThan(grokScore);
+  });
+
+  it("governance event includes agentCount and topSuggestion", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    const critiqueCalls = vi
+      .mocked(prisma.governanceEvent.create)
+      .mock.calls.filter(
+        ([args]) =>
+          (args as { data: { type: string } }).data.type === "ARTIFACT_CRITIQUE_CREATED"
+      );
+
+    for (const [args] of critiqueCalls) {
+      const details = (args as { data: { details: Record<string, unknown> } }).data.details;
+      expect(details).toHaveProperty("agentCount", 2);
+      expect(typeof details.topSuggestion).toBe("string");
+      expect((details.topSuggestion as string).length).toBeLessThanOrEqual(80);
+    }
+  });
+
+  it("topSuggestion in governance event is a non-empty excerpt from agent suggestions", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude"] });
+
+    const [args] = vi
+      .mocked(prisma.governanceEvent.create)
+      .mock.calls.find(
+        ([a]) => (a as { data: { type: string } }).data.type === "ARTIFACT_CRITIQUE_CREATED"
+      )!;
+
+    const details = (args as { data: { details: Record<string, unknown> } }).data.details;
+    expect((details.topSuggestion as string).length).toBeGreaterThan(0);
+  });
+});

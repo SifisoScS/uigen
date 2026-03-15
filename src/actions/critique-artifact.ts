@@ -40,6 +40,17 @@ const GROK_DEFAULT_CRITIQUE = {
   ],
 };
 
+// ── Agent reputation stubs ────────────────────────────────────────────────────
+
+/** Reputation scores used to weight critique priority. Range: 0–1. */
+export const AGENT_REPUTATION: Record<string, number> = {
+  Claude: 0.9,
+  Grok: 0.85,
+};
+
+/** Fallback reputation for unknown agents. */
+const DEFAULT_REPUTATION = 0.7;
+
 // ── Aggregated critique type (exported for UI consumption) ───────────────────
 
 export interface AggregatedCritique {
@@ -47,6 +58,8 @@ export interface AggregatedCritique {
   issues: string[];
   suggestions: string[];
   priority: number;
+  /** priority × agentReputation — higher is better. */
+  finalScore: number;
   invocationId: string;
 }
 
@@ -160,6 +173,10 @@ export async function critiqueArtifact({
     for (let i = 0; i < agents.length; i++) {
       const name = agents[i];
       const result = critiqueResults[i];
+      const priority = i + 1; // 1-indexed; first agent = highest priority
+      const reputation = AGENT_REPUTATION[name] ?? DEFAULT_REPUTATION;
+      // Divide by priority so that lower priority number (= more important) yields a higher score
+      const finalScore = parseFloat((reputation / priority).toFixed(4));
 
       const invocation = await prisma.agentInvocation.create({
         data: {
@@ -190,6 +207,8 @@ export async function critiqueArtifact({
             childId: artifactId,
             relationType: "EVALUATED_BY",
             agentName: name,
+            agentCount: agents.length,
+            topSuggestion: (result.suggestions[0] ?? "").slice(0, 80),
           },
         },
       });
@@ -198,10 +217,14 @@ export async function critiqueArtifact({
         agentName: name,
         issues: result.issues,
         suggestions: result.suggestions,
-        priority: i + 1, // 1-indexed; first agent = highest priority
+        priority,
+        finalScore,
         invocationId: invocation.id,
       });
     }
+
+    // Sort by finalScore descending — highest-ranked agent first
+    aggregatedCritiques.sort((a, b) => b.finalScore - a.finalScore);
 
     // In multi-agent mode: no auto-variant creation — user selects via generateSelectedVariants
     return {
@@ -296,9 +319,19 @@ export async function critiqueArtifact({
     variantIds.push(variant.id);
   }
 
+  const reputation = AGENT_REPUTATION[agentName] ?? DEFAULT_REPUTATION;
   return {
     invocationId: invocation.id,
     variantIds,
-    aggregatedCritiques: [] as AggregatedCritique[],
+    aggregatedCritiques: [
+      {
+        agentName,
+        issues: critiqueJson.issues,
+        suggestions: critiqueJson.suggestions,
+        priority: 1,
+        finalScore: parseFloat((reputation / 1).toFixed(4)),
+        invocationId: invocation.id,
+      },
+    ] as AggregatedCritique[],
   };
 }
