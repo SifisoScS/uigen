@@ -89,6 +89,20 @@ model GovernanceEvent {
   @@index([projectId, timestamp])
 }
 
+model GovernanceRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  eventType   String
+  condition   Json?
+  action      Json
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventType, enabled])
+}
+
 model DatasetSnapshot {
   id            String   @id @default(cuid())
   name          String
