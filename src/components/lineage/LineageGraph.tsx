@@ -612,7 +612,10 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
               ? "text-neutral-600 line-through"
               : "text-neutral-500";
 
-            const statusBadge = isMerged
+            const hasConflictResolved = isMerged && v.conflictResolvedAt != null;
+            const statusBadge = hasConflictResolved
+              ? { label: "⚠ MERGED", cls: "text-amber-400 bg-amber-950/60 border-amber-700/40" }
+              : isMerged
               ? { label: "⇢ MERGED", cls: "text-emerald-500 bg-emerald-950/60 border-emerald-700/40" }
               : isApproved
               ? { label: "✓ APPR", cls: "text-emerald-600 bg-emerald-950/60 border-emerald-800/40" }

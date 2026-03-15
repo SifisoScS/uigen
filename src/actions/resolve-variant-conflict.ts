@@ -2,34 +2,33 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { detectConflicts, type ConflictingFile } from "@/lib/virtual-fs-utils";
-
-export type MergeResult =
-  | { type: "ok"; mergedAt: Date }
-  | { type: "conflict"; conflictingFiles: ConflictingFile[] };
+import { applyResolutions, buildNestedFS, type Resolution } from "@/lib/virtual-fs-utils";
 
 /**
- * Merge an approved variant Project back into the original artifact's project.
+ * Apply per-file conflict resolutions and complete the variant merge.
  *
- * 1. If the variant's files conflict with the original project's files, returns
- *    `{ type: "conflict", conflictingFiles }` and logs
- *    ARTIFACT_VARIANT_CONFLICT_DETECTED — no merge is applied yet.
- * 2. If there are no conflicts, applies the merge immediately and returns
- *    `{ type: "ok", mergedAt }`.
+ * Each resolution specifies whether to keep the "original" or take the
+ * "variant" version of a conflicting file. Non-conflicting files follow the
+ * default merge strategy (variant additions are included; identical files are
+ * kept; original-only files are preserved).
  *
- * Only APPROVED variants may be merged. Requires an authenticated session.
+ * On success, the original project's `data` field is updated with the merged
+ * file system and `mergedFromVariantId`, `mergedAt`, and `conflictResolvedAt`
+ * are stamped. An ARTIFACT_VARIANT_CONFLICT_RESOLVED governance event is logged.
  */
-export async function mergeVariant({
+export async function resolveVariantConflict({
   originalArtifactId,
   variantProjectId,
+  resolutions,
 }: {
   originalArtifactId: string;
   variantProjectId: string;
-}): Promise<MergeResult> {
+  resolutions: Resolution[];
+}): Promise<{ mergedAt: Date; conflictResolvedAt: Date }> {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
-  // 1. Verify the variant is linked to the original artifact via NEW_VARIANT_OF
+  // 1. Verify link
   const relation = await prisma.artifactRelation.findFirst({
     where: {
       parentType: "PublicArtifact",
@@ -49,49 +48,36 @@ export async function mergeVariant({
   if (!variant) throw new Error("Variant project not found");
   if (variant.status !== "APPROVED") throw new Error("Variant must be APPROVED before merging");
 
-  // 3. Resolve the original artifact's project
+  // 3. Resolve the artifact
   const artifact = await prisma.publicArtifact.findUnique({
     where: { id: originalArtifactId },
     select: { id: true, projectId: true },
   });
   if (!artifact) throw new Error("Artifact not found");
 
-  // 4. Fetch original project data for conflict detection
+  // 4. Fetch original project data
   const originalProject = await prisma.project.findUnique({
     where: { id: artifact.projectId },
     select: { id: true, data: true },
   });
   if (!originalProject) throw new Error("Original project not found");
 
-  // 5. Detect file-level conflicts
-  const conflictingFiles = detectConflicts(originalProject.data, variant.data);
+  // 5. Apply resolutions → build merged file system
+  const mergedFiles = applyResolutions(originalProject.data, variant.data, resolutions);
+  const mergedTree = buildNestedFS(mergedFiles);
+  const mergedData = JSON.stringify(mergedTree);
 
-  if (conflictingFiles.length > 0) {
-    // Log conflict detection governance event — no merge applied yet
-    await prisma.governanceEvent.create({
-      data: {
-        projectId: artifact.projectId,
-        type: "ARTIFACT_VARIANT_CONFLICT_DETECTED",
-        actor: session.userId,
-        details: {
-          variantProjectId,
-          originalArtifactId,
-          conflictCount: conflictingFiles.length,
-          conflictingPaths: conflictingFiles.map((f) => f.path),
-        },
-      },
-    });
-
-    return { type: "conflict", conflictingFiles };
-  }
-
-  // 6. No conflicts — record the merge on the original project
   const mergedAt = new Date();
+  const conflictResolvedAt = mergedAt;
+
+  // 6. Update original project
   await prisma.project.update({
     where: { id: artifact.projectId },
     data: {
+      data: mergedData,
       mergedFromVariantId: variantProjectId,
       mergedAt,
+      conflictResolvedAt,
     },
   });
 
@@ -99,15 +85,17 @@ export async function mergeVariant({
   await prisma.governanceEvent.create({
     data: {
       projectId: artifact.projectId,
-      type: "ARTIFACT_VARIANT_MERGED",
+      type: "ARTIFACT_VARIANT_CONFLICT_RESOLVED",
       actor: session.userId,
       details: {
         variantProjectId,
         originalArtifactId,
         originalProjectId: artifact.projectId,
+        resolutionCount: resolutions.length,
+        resolutions: resolutions.map((r) => ({ path: r.path, choice: r.choice })),
       },
     },
   });
 
-  return { type: "ok", mergedAt };
+  return { mergedAt, conflictResolvedAt };
 }

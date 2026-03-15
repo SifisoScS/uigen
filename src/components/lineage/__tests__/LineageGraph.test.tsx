@@ -60,7 +60,8 @@ function makeVariant(
   id: string,
   suggestion = `Suggestion for ${id}`,
   status = "DRAFT",
-  isMerged = false
+  isMerged = false,
+  conflictResolvedAt: Date | null = null
 ): VariantNode {
   return {
     id,
@@ -68,6 +69,7 @@ function makeVariant(
     suggestion,
     status,
     isMerged,
+    conflictResolvedAt,
     createdAt: new Date("2026-01-01"),
   };
 }

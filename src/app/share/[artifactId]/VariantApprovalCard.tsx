@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { CheckCircle, XCircle, Clock, GitMerge } from "lucide-react";
 import { approveVariant } from "@/actions/approve-variant";
 import { mergeVariant } from "@/actions/merge-variant";
+import { ConflictResolution } from "@/components/variant/ConflictResolution";
+import type { ConflictingFile } from "@/lib/virtual-fs-utils";
 
 interface Props {
   variantId: string;
@@ -58,6 +60,7 @@ export function VariantApprovalCard({
 }: Props) {
   const [status, setStatus] = useState(initialStatus);
   const [isMerged, setIsMerged] = useState(initialIsMerged);
+  const [conflicts, setConflicts] = useState<ConflictingFile[] | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleApprove(approved: boolean) {
@@ -74,12 +77,25 @@ export function VariantApprovalCard({
   function handleMerge() {
     startTransition(async () => {
       try {
-        await mergeVariant({ originalArtifactId, variantProjectId: variantId });
-        setIsMerged(true);
+        const result = await mergeVariant({
+          originalArtifactId,
+          variantProjectId: variantId,
+        });
+        if (result.type === "conflict") {
+          setConflicts(result.conflictingFiles);
+        } else {
+          setIsMerged(true);
+          setConflicts(null);
+        }
       } catch {
         // keep current state on error
       }
     });
+  }
+
+  function handleResolved() {
+    setIsMerged(true);
+    setConflicts(null);
   }
 
   return (
@@ -89,6 +105,8 @@ export function VariantApprovalCard({
         "rounded-lg border px-4 py-3 flex flex-col gap-2 transition-colors",
         isMerged
           ? "border-emerald-700/40 bg-emerald-950/10"
+          : conflicts
+          ? "border-amber-700/40 bg-amber-950/10"
           : status === "APPROVED"
           ? "border-emerald-800/30 bg-emerald-950/10"
           : status === "REJECTED"
@@ -97,7 +115,15 @@ export function VariantApprovalCard({
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className={`text-xs leading-snug flex-1 min-w-0 ${status === "REJECTED" ? "line-through text-neutral-600" : isMerged ? "text-emerald-300/80" : "text-neutral-300"}`}>
+        <p
+          className={`text-xs leading-snug flex-1 min-w-0 ${
+            status === "REJECTED"
+              ? "line-through text-neutral-600"
+              : isMerged
+              ? "text-emerald-300/80"
+              : "text-neutral-300"
+          }`}
+        >
           {suggestion ?? variantName}
         </p>
         <StatusBadge status={status} isMerged={isMerged} />
@@ -126,7 +152,7 @@ export function VariantApprovalCard({
         </div>
       )}
 
-      {status === "APPROVED" && !isMerged && (
+      {status === "APPROVED" && !isMerged && !conflicts && (
         <button
           disabled={isPending}
           onClick={handleMerge}
@@ -136,6 +162,15 @@ export function VariantApprovalCard({
           <GitMerge className="h-2.5 w-2.5" />
           Merge into project
         </button>
+      )}
+
+      {conflicts && !isMerged && (
+        <ConflictResolution
+          originalArtifactId={originalArtifactId}
+          variantProjectId={variantId}
+          conflictingFiles={conflicts}
+          onResolved={handleResolved}
+        />
       )}
     </div>
   );
