@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
     artifactRelation: { findFirst: vi.fn(), upsert: vi.fn() },
     project: { findUnique: vi.fn() },
     publicArtifact: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    evaluationRun: { findFirst: vi.fn() },
     governanceEvent: { create: vi.fn() },
   },
 }));
@@ -91,6 +92,7 @@ beforeEach(() => {
   vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(ORIGINAL_ARTIFACT as never);
   vi.mocked(prisma.publicArtifact.create).mockResolvedValue(NEW_ARTIFACT as never);
   vi.mocked(prisma.publicArtifact.update).mockResolvedValue(NEW_ARTIFACT as never);
+  vi.mocked(prisma.evaluationRun.findFirst).mockResolvedValue(null); // no evaluation = allowed
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
   vi.mocked(prisma.artifactRelation.upsert).mockResolvedValue({ id: "rel-2" } as never);
 });
@@ -219,6 +221,26 @@ describe("publishVariantAsArtifact", () => {
         data: expect.objectContaining({ filesData: mergedData }),
       })
     );
+  });
+
+  it("throws when the latest evaluation run for the artifact is FAILED", async () => {
+    vi.mocked(prisma.evaluationRun.findFirst).mockResolvedValue({
+      status: "FAILED",
+    } as never);
+
+    await expect(
+      publishVariantAsArtifact({ variantProjectId: "proj-var-1", originalArtifactId: "art-1" })
+    ).rejects.toThrow(/failed evaluation/i);
+  });
+
+  it("allows publish when no evaluation run exists (backwards compat)", async () => {
+    vi.mocked(prisma.evaluationRun.findFirst).mockResolvedValue(null);
+
+    const result = await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+    expect(result.artifactId).toBe("art-2");
   });
 
   it("upserts ArtifactRelation with VARIANT_PROMOTED_TO type", async () => {

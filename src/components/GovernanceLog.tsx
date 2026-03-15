@@ -43,6 +43,8 @@ function eventLabel(type: string): string {
     case "ARTIFACT_VARIANT_PUBLISHED":         return "Next generation published";
     case "AGENT_REPUTATION_UPDATED":           return "Reputation updated";
     case "ARTIFACT_SUGGESTIONS_SCORED":        return "Suggestions scored";
+    case "EVALUATION_RUN_COMPLETED":           return "Evaluation completed";
+    case "REGRESSION_DETECTED":               return "Regression detected";
     default:                                 return type;
   }
 }
@@ -67,6 +69,8 @@ function eventAccent(type: string): string {
     case "ARTIFACT_VARIANT_PUBLISHED":         return "text-indigo-400";
     case "AGENT_REPUTATION_UPDATED":           return "text-sky-400";
     case "ARTIFACT_SUGGESTIONS_SCORED":        return "text-teal-400";
+    case "EVALUATION_RUN_COMPLETED":           return "text-cyan-400";
+    case "REGRESSION_DETECTED":               return "text-red-500";
     default:                                 return "text-neutral-400";
   }
 }
