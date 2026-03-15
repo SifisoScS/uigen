@@ -10,6 +10,7 @@ import {
   parseComponentTree,
   extractStyleSignature,
 } from "@/lib/artifact-introspection";
+import { checkWithSovereignGate } from "@/lib/sifiso-gate";
 
 export async function publishArtifact({
   projectId,
@@ -97,6 +98,15 @@ export async function publishArtifact({
     registryTags: tags,
   };
 
+  // 6b. Sovereign Gate pre-flight check
+  const gateResult = await checkWithSovereignGate({
+    uigen_action: "artifact_publish",
+    artifact_name: name,
+    artifact_description: description,
+    semantic_summary: semanticSummary,
+    tags,
+  });
+
   // 7. Create PublicArtifact row
   const artifact = await prisma.publicArtifact.create({
     data: {
@@ -128,7 +138,14 @@ export async function publishArtifact({
       projectId,
       type: "ARTIFACT_PUBLISHED",
       actor: session.userId,
-      details: { artifactId: artifact.id, version, branchName, name },
+      details: {
+          artifactId: artifact.id,
+          version,
+          branchName,
+          name,
+          ubuntuScore: gateResult.ubuntu_score,
+          gateLogEntryId: gateResult.log_entry_id,
+        },
     },
   });
 

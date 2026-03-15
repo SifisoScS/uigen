@@ -10,6 +10,7 @@ import {
   extractStyleSignature,
 } from "@/lib/artifact-introspection";
 import { computeSemanticDelta } from "@/lib/semantic-delta";
+import { checkWithSovereignGate } from "@/lib/sifiso-gate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,24 @@ export async function publishVariantAsArtifact({
     registryTags: resolvedTags,
   };
 
+  // 11b. Compute semantic delta (needed for gate check before artifact creation)
+  const delta = computeSemanticDelta(originalArtifact.filesData, filesData);
+
+  // 11c. Sovereign Gate pre-flight check
+  const gateResult = await checkWithSovereignGate({
+    uigen_action: "variant_publish",
+    artifact_name: resolvedName,
+    artifact_description: resolvedDescription,
+    semantic_summary: semanticSummary,
+    tags: resolvedTags,
+    human_approved: true,
+    evaluation_passed: latestEval?.status === "PASSED" ? true : latestEval?.status === "FAILED" ? false : undefined,
+    a11y_delta: delta.a11yDelta,
+    lines_changed: delta.linesChanged,
+    added_components: delta.addedComponents,
+    removed_components: delta.removedComponents,
+  });
+
   // 12. Create PublicArtifact row
   const newArtifact = await prisma.publicArtifact.create({
     data: {
@@ -211,8 +230,7 @@ export async function publishVariantAsArtifact({
     },
   });
 
-  // 12b. Compute semantic delta and record transform trace
-  const delta = computeSemanticDelta(originalArtifact.filesData, filesData);
+  // 12b. Record semantic transform trace (delta already computed in 11b)
   await prisma.semanticTransform.create({
     data: {
       fromArtifactId: originalArtifactId,
@@ -259,6 +277,8 @@ export async function publishVariantAsArtifact({
         variantProjectId,
         version: nextVersion,
         name: resolvedName,
+        ubuntuScore: gateResult.ubuntu_score,
+        gateLogEntryId: gateResult.log_entry_id,
       },
     },
   });

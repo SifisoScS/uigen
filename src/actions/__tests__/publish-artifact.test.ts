@@ -37,11 +37,23 @@ vi.mock("@/lib/governance/enforce", () => ({
   enforceBranchPolicy: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/sifiso-gate", () => ({
+  checkWithSovereignGate: vi.fn().mockResolvedValue({
+    passed: true,
+    ubuntu_score: 0.82,
+    failed_predicates: [],
+    rationale: "Gate bypassed — SIFISO_OS_URL not configured (development mode).",
+    log_entry_id: "0".repeat(64),
+    bypassed: true,
+  }),
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
 const { enforceBranchPolicy } = await import("@/lib/governance/enforce");
+const { checkWithSovereignGate } = await import("@/lib/sifiso-gate");
 const { publishArtifact } = await import("../publish-artifact");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -216,6 +228,57 @@ describe("publishArtifact", () => {
     await expect(
       publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "Test" })
     ).rejects.toThrow(/LOCKED/);
+  });
+});
+
+describe("publishArtifact — Sovereign Gate", () => {
+  it("calls checkWithSovereignGate with artifact_publish action", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "AuthForm",
+      description: "Accessible auth form",
+      tags: ["auth"],
+    });
+
+    expect(checkWithSovereignGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uigen_action: "artifact_publish",
+        artifact_name: "AuthForm",
+        artifact_description: "Accessible auth form",
+        tags: ["auth"],
+      })
+    );
+  });
+
+  it("stores ubuntuScore and gateLogEntryId in ARTIFACT_PUBLISHED governance event", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "ARTIFACT_PUBLISHED",
+          details: expect.objectContaining({
+            ubuntuScore: 0.82,
+            gateLogEntryId: "0".repeat(64),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("throws when gate check fails (passed=false)", async () => {
+    vi.mocked(checkWithSovereignGate).mockRejectedValueOnce(
+      new Error("Ubuntu alignment gate failed (score 0.450 < θ 0.65). Failed predicates: Ubuntu Alignment.")
+    );
+
+    await expect(
+      publishArtifact({ projectId: "proj-1", branchName: "release/v1.0", name: "BadComponent" })
+    ).rejects.toThrow(/ubuntu alignment gate failed/i);
   });
 });
 
