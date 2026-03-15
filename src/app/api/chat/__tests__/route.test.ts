@@ -193,6 +193,7 @@ describe("POST /api/chat", () => {
         mergedFromVariantId: null,
         mergedAt: null,
         conflictResolvedAt: null,
+        mutationAppliedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });

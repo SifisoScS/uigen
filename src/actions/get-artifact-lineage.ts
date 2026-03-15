@@ -111,6 +111,8 @@ export interface VariantNode {
   status: string;
   /** True when this variant has been merged back into the original project. */
   isMerged: boolean;
+  /** True when applyVariantSuggestion has successfully mutated this variant's files. */
+  isMutated: boolean;
   /** Set when a conflict was detected and resolved before the merge completed. */
   conflictResolvedAt: Date | null;
   createdAt: Date;
@@ -322,7 +324,7 @@ export async function getArtifactLineageDeep(
   for (const rel of variantRelations) {
     const project = await prisma.project.findUnique({
       where: { id: rel.childId },
-      select: { id: true, name: true, status: true, createdAt: true },
+      select: { id: true, name: true, status: true, mutationAppliedAt: true, createdAt: true },
     });
     if (project) {
       // Extract suggestion hint from project name (after " — ")
@@ -335,6 +337,7 @@ export async function getArtifactLineageDeep(
         suggestion,
         status: project.status,
         isMerged,
+        isMutated: project.mutationAppliedAt !== null,
         conflictResolvedAt: isMerged ? (originalProject?.conflictResolvedAt ?? null) : null,
         createdAt: project.createdAt,
       });

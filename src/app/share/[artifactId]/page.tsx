@@ -252,6 +252,7 @@ export default async function SharePage({
                   variantName={v.name}
                   initialStatus={v.status}
                   initialIsMerged={v.isMerged}
+                  initialIsMutated={v.isMutated}
                 />
               ))}
             </div>

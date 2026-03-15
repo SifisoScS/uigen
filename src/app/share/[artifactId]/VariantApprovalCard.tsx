@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle, XCircle, Clock, GitMerge } from "lucide-react";
+import { CheckCircle, XCircle, Clock, GitMerge, Wand2 } from "lucide-react";
 import { approveVariant } from "@/actions/approve-variant";
 import { mergeVariant } from "@/actions/merge-variant";
+import { applyVariantSuggestion } from "@/actions/apply-variant-suggestion";
 import { ConflictResolution } from "@/components/variant/ConflictResolution";
 import type { ConflictingFile } from "@/lib/virtual-fs-utils";
 
@@ -14,6 +15,7 @@ interface Props {
   variantName: string;
   initialStatus: string;
   initialIsMerged: boolean;
+  initialIsMutated: boolean;
 }
 
 function StatusBadge({ status, isMerged }: { status: string; isMerged: boolean }) {
@@ -57,9 +59,13 @@ export function VariantApprovalCard({
   variantName,
   initialStatus,
   initialIsMerged,
+  initialIsMutated,
 }: Props) {
   const [status, setStatus] = useState(initialStatus);
   const [isMerged, setIsMerged] = useState(initialIsMerged);
+  const [isMutated, setIsMutated] = useState(initialIsMutated);
+  const [isApplying, setIsApplying] = useState(false);
+  const [mutateError, setMutateError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictingFile[] | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -98,6 +104,19 @@ export function VariantApprovalCard({
     setConflicts(null);
   }
 
+  async function handleApplySuggestion() {
+    setIsApplying(true);
+    setMutateError(null);
+    try {
+      await applyVariantSuggestion({ variantProjectId: variantId });
+      setIsMutated(true);
+    } catch (err) {
+      setMutateError(err instanceof Error ? err.message : "Failed to apply suggestion");
+    } finally {
+      setIsApplying(false);
+    }
+  }
+
   return (
     <div
       data-testid={`variant-card-${variantId}`}
@@ -130,7 +149,7 @@ export function VariantApprovalCard({
       </div>
 
       {status === "DRAFT" && !isMerged && (
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1 flex-wrap">
           <button
             disabled={isPending}
             onClick={() => handleApprove(true)}
@@ -149,7 +168,27 @@ export function VariantApprovalCard({
             <XCircle className="h-2.5 w-2.5" />
             Reject
           </button>
+          {!isMutated && (
+            <button
+              disabled={isApplying || isPending}
+              onClick={handleApplySuggestion}
+              data-testid={`apply-btn-${variantId}`}
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-medium bg-violet-950/40 border border-violet-800/40 text-violet-400 hover:bg-violet-900/40 hover:border-violet-700/50 transition-colors disabled:opacity-50"
+            >
+              <Wand2 className="h-2.5 w-2.5" />
+              {isApplying ? "Applying…" : "Apply suggestion"}
+            </button>
+          )}
+          {isMutated && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-950/40 border border-violet-700/40 text-violet-400 text-[10px] font-medium">
+              <Wand2 className="h-2.5 w-2.5" />
+              Code updated
+            </span>
+          )}
         </div>
+      )}
+      {mutateError && (
+        <p className="text-[10px] text-red-400 mt-1">{mutateError}</p>
       )}
 
       {status === "APPROVED" && !isMerged && !conflicts && (

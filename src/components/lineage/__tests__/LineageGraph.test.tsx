@@ -69,6 +69,7 @@ function makeVariant(
     suggestion,
     status,
     isMerged,
+    isMutated: false,
     conflictResolvedAt,
     createdAt: new Date("2026-01-01"),
   };
