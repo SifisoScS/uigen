@@ -18,7 +18,7 @@ vi.mock("@/actions/get-artifact-lineage", () => ({
 
 const { getArtifactLineageDeep } = await import("@/actions/get-artifact-lineage");
 const { LineageGraph } = await import("../LineageGraph");
-import type { ArtifactLineageDeep, ArtifactNode, CrossParentNode } from "@/actions/get-artifact-lineage";
+import type { ArtifactLineageDeep, ArtifactNode, CrossParentNode, VariantNode } from "@/actions/get-artifact-lineage";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +56,15 @@ function makeCrossParent(id: string, name = `Workflow ${id}`): CrossParentNode {
   };
 }
 
+function makeVariant(id: string, suggestion = `Suggestion for ${id}`): VariantNode {
+  return {
+    id,
+    name: `AuthForm — ${suggestion}`,
+    suggestion,
+    createdAt: new Date("2026-01-01"),
+  };
+}
+
 function makeData(
   currentId: string,
   opts: {
@@ -63,6 +72,7 @@ function makeData(
     children?: ArtifactNode[];
     depthReached?: boolean;
     crossParents?: CrossParentNode[];
+    variants?: VariantNode[];
   } = {}
 ): ArtifactLineageDeep {
   return {
@@ -71,6 +81,7 @@ function makeData(
     children: opts.children ?? [],
     depthReached: opts.depthReached ?? false,
     crossParents: opts.crossParents ?? [],
+    variants: opts.variants ?? [],
   };
 }
 
@@ -381,6 +392,54 @@ describe("LineageGraph", () => {
     render(<LineageGraph initialData={data} currentId="cur" />);
 
     expect(screen.getByTestId("agent-node-inv-badge").textContent).toContain("EVAL");
+  });
+
+  it("renders a variant node when variants contains an entry", () => {
+    const data = makeData("cur", {
+      variants: [makeVariant("var-1", "Add aria-label to buttons")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    expect(screen.getByTestId("variant-node-var-1")).toBeDefined();
+  });
+
+  it("clicking a variant node navigates to /{id}", async () => {
+    const user = userEvent.setup();
+    const data = makeData("cur", {
+      variants: [makeVariant("var-42", "Use shadcn Button")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    await user.click(screen.getByTestId("variant-node-var-42"));
+
+    expect(mockPush).toHaveBeenCalledWith("/var-42");
+  });
+
+  it("does NOT render variant nodes when variants is empty", () => {
+    const data = makeData("cur", { variants: [] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    const canvas = screen.getByTestId("graph-canvas");
+    expect(canvas.querySelector("[data-testid^='variant-node-']")).toBeNull();
+  });
+
+  it("variant node shows VAR badge", () => {
+    const data = makeData("cur", {
+      variants: [makeVariant("var-badge", "Improve contrast")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    expect(screen.getByTestId("variant-node-var-badge").textContent).toContain("VAR");
+  });
+
+  it("variant node shows the suggestion text", () => {
+    const data = makeData("cur", {
+      variants: [makeVariant("var-txt", "Extract theme tokens")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    const node = screen.getByTestId("variant-node-var-txt");
+    expect(node.textContent).toContain("Extract theme tokens");
   });
 
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {

@@ -32,6 +32,7 @@ function eventLabel(type: string): string {
     case "ARTIFACT_RELATION_CREATED":        return "Relation created";
     case "ARTIFACT_INTROSPECTION_GENERATED": return "Introspection generated";
     case "ARTIFACT_CRITIQUE_CREATED":        return "Critique created";
+    case "ARTIFACT_VARIANT_CREATED":         return "Variant created";
     default:                                 return type;
   }
 }
@@ -45,6 +46,7 @@ function eventAccent(type: string): string {
     case "ARTIFACT_RELATION_CREATED":        return "text-amber-300";
     case "ARTIFACT_INTROSPECTION_GENERATED": return "text-violet-400";
     case "ARTIFACT_CRITIQUE_CREATED":        return "text-orange-400";
+    case "ARTIFACT_VARIANT_CREATED":         return "text-neutral-400";
     default:                                 return "text-neutral-400";
   }
 }

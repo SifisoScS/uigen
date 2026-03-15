@@ -19,6 +19,12 @@ vi.mock("@/lib/prisma", () => ({
     datasetSnapshot: {
       findUnique: vi.fn(),
     },
+    agentInvocation: {
+      findUnique: vi.fn(),
+    },
+    project: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -69,6 +75,8 @@ beforeEach(() => {
   // Default: findMany returns empty array
   vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
   vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+  vi.mocked(prisma.project.findUnique).mockResolvedValue(null);
+  vi.mocked(prisma.agentInvocation.findUnique).mockResolvedValue(null);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
