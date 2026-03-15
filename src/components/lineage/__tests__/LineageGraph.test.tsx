@@ -232,4 +232,56 @@ describe("LineageGraph", () => {
     const canvas = screen.getByTestId("graph-canvas");
     expect(canvas.querySelector("[data-testid^='workflow-node-']")).toBeNull();
   });
+
+  it("renders a DatasetSnapshot node when crossParents contains a DatasetSnapshot", () => {
+    const dsParent: CrossParentNode = {
+      id: "ds-99",
+      parentType: "DatasetSnapshot",
+      parentName: "AuthForm Training Data",
+      outputSummary: null,
+      relationType: "INFORMED_BY",
+      createdAt: new Date("2026-01-01"),
+    };
+    const data = makeData("cur", { crossParents: [dsParent] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    expect(screen.getByTestId("dataset-node-ds-99")).toBeDefined();
+  });
+
+  it("clicking a DatasetSnapshot node navigates to /dataset-snapshot/[id]", async () => {
+    const user = userEvent.setup();
+    const dsParent: CrossParentNode = {
+      id: "ds-77",
+      parentType: "DatasetSnapshot",
+      parentName: "My Dataset",
+      outputSummary: null,
+      relationType: "INFORMED_BY",
+      createdAt: new Date("2026-01-01"),
+    };
+    const data = makeData("cur", { crossParents: [dsParent] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    await user.click(screen.getByTestId("dataset-node-ds-77"));
+
+    expect(mockPush).toHaveBeenCalledWith("/dataset-snapshot/ds-77");
+  });
+
+  it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {
+    const dsParent: CrossParentNode = {
+      id: "ds-badge",
+      parentType: "DatasetSnapshot",
+      parentName: "My Dataset",
+      outputSummary: null,
+      relationType: "INFORMED_BY",
+      createdAt: new Date("2026-01-01"),
+    };
+    const wfParent = makeCrossParent("wf-badge", "My Workflow");
+    const data = makeData("cur", { crossParents: [dsParent, wfParent] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    const dsNode = screen.getByTestId("dataset-node-ds-badge");
+    const wfNode = screen.getByTestId("workflow-node-wf-badge");
+    expect(dsNode.textContent).toContain("DATA");
+    expect(wfNode.textContent).toContain("RUN");
+  });
 });

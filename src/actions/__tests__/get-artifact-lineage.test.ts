@@ -16,6 +16,9 @@ vi.mock("@/lib/prisma", () => ({
     workflowRun: {
       findUnique: vi.fn(),
     },
+    datasetSnapshot: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -298,6 +301,59 @@ describe("getArtifactLineageDeep", () => {
     vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(null);
 
     const result = await getArtifactLineageDeep("art-missing-wf");
+
+    expect(result.crossParents).toEqual([]);
+  });
+
+  it("populates crossParents from DatasetSnapshot ArtifactRelation rows", async () => {
+    const raw = makeDeepRaw("art-ds");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([
+      {
+        id: "rel-ds-1",
+        parentType: "DatasetSnapshot",
+        parentId: "ds-42",
+        childType: "PublicArtifact",
+        childId: "art-ds",
+        relationType: "INFORMED_BY",
+        createdAt: new Date("2026-01-01"),
+      },
+    ] as never);
+    vi.mocked(prisma.datasetSnapshot.findUnique).mockResolvedValue({
+      id: "ds-42",
+      name: "AuthForm Training Data",
+      createdAt: new Date("2026-01-01"),
+    } as never);
+
+    const result = await getArtifactLineageDeep("art-ds");
+
+    expect(result.crossParents).toHaveLength(1);
+    expect(result.crossParents[0].id).toBe("ds-42");
+    expect(result.crossParents[0].parentName).toBe("AuthForm Training Data");
+    expect(result.crossParents[0].relationType).toBe("INFORMED_BY");
+    expect(result.crossParents[0].parentType).toBe("DatasetSnapshot");
+    expect(result.crossParents[0].outputSummary).toBeNull();
+  });
+
+  it("skips DatasetSnapshot ArtifactRelation rows where snapshot is not found", async () => {
+    const raw = makeDeepRaw("art-missing-ds");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([
+      {
+        id: "rel-orphan-ds",
+        parentType: "DatasetSnapshot",
+        parentId: "ds-deleted",
+        childType: "PublicArtifact",
+        childId: "art-missing-ds",
+        relationType: "INFORMED_BY",
+        createdAt: new Date("2026-01-01"),
+      },
+    ] as never);
+    vi.mocked(prisma.datasetSnapshot.findUnique).mockResolvedValue(null);
+
+    const result = await getArtifactLineageDeep("art-missing-ds");
 
     expect(result.crossParents).toEqual([]);
   });

@@ -217,6 +217,21 @@ export async function getArtifactLineageDeep(
           createdAt: wr.createdAt,
         });
       }
+    } else if (rel.parentType === "DatasetSnapshot") {
+      const ds = await prisma.datasetSnapshot.findUnique({
+        where: { id: rel.parentId },
+        select: { id: true, name: true, createdAt: true },
+      });
+      if (ds) {
+        crossParents.push({
+          id: ds.id,
+          parentType: "DatasetSnapshot",
+          parentName: ds.name,
+          outputSummary: null,
+          relationType: rel.relationType,
+          createdAt: ds.createdAt,
+        });
+      }
     }
   }
 

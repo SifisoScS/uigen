@@ -24,6 +24,9 @@ vi.mock("@/lib/prisma", () => ({
     workflowRun: {
       findUnique: vi.fn(),
     },
+    datasetSnapshot: {
+      findUnique: vi.fn(),
+    },
     artifactRelation: {
       create: vi.fn(),
     },
@@ -102,6 +105,17 @@ const WORKFLOW_RUN = {
   updatedAt: new Date(),
 };
 
+const DATASET_SNAPSHOT = {
+  id: "ds-1",
+  name: "AuthForm Training Data",
+  description: null,
+  format: "csv",
+  rowCount: 500,
+  columnSummary: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getSession).mockResolvedValue(SESSION);
@@ -112,6 +126,7 @@ beforeEach(() => {
   vi.mocked(prisma.publicArtifact.update).mockResolvedValue(ARTIFACT as never);
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
   vi.mocked(prisma.workflowRun.findUnique).mockResolvedValue(WORKFLOW_RUN as never);
+  vi.mocked(prisma.datasetSnapshot.findUnique).mockResolvedValue(DATASET_SNAPSHOT as never);
   vi.mocked(prisma.artifactRelation.create).mockResolvedValue({ id: "rel-1" } as never);
 });
 
@@ -269,5 +284,89 @@ describe("publishArtifact — WorkflowRun linkage", () => {
     });
 
     expect(prisma.artifactRelation.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("publishArtifact — DatasetSnapshot linkage", () => {
+  it("creates INFORMED_BY ArtifactRelation when datasetSnapshotId is provided", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+      datasetSnapshotId: "ds-1",
+    });
+
+    expect(prisma.artifactRelation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          parentType: "DatasetSnapshot",
+          parentId: "ds-1",
+          childType: "PublicArtifact",
+          childId: "art-1",
+          relationType: "INFORMED_BY",
+        }),
+      })
+    );
+  });
+
+  it("logs ARTIFACT_RELATION_CREATED governance event for DatasetSnapshot linkage", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+      datasetSnapshotId: "ds-1",
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "ARTIFACT_RELATION_CREATED",
+          details: expect.objectContaining({
+            parentType: "DatasetSnapshot",
+            parentId: "ds-1",
+            relationType: "INFORMED_BY",
+          }),
+        }),
+      })
+    );
+  });
+
+  it("throws when datasetSnapshotId does not exist", async () => {
+    vi.mocked(prisma.datasetSnapshot.findUnique).mockResolvedValue(null);
+
+    await expect(
+      publishArtifact({
+        projectId: "proj-1",
+        branchName: "release/v1.0",
+        name: "My Component",
+        datasetSnapshotId: "nonexistent-ds",
+      })
+    ).rejects.toThrow(/DatasetSnapshot not found/);
+  });
+
+  it("does NOT create DatasetSnapshot relation when datasetSnapshotId is omitted", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+    });
+
+    expect(prisma.artifactRelation.create).not.toHaveBeenCalled();
+  });
+
+  it("can link both workflowRunId and datasetSnapshotId in the same publish call", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+      workflowRunId: "wf-run-1",
+      datasetSnapshotId: "ds-1",
+    });
+
+    expect(prisma.artifactRelation.create).toHaveBeenCalledTimes(2);
+    const calls = vi.mocked(prisma.artifactRelation.create).mock.calls;
+    const relTypes = calls.map((c) => (c[0] as { data: { relationType: string } }).data.relationType);
+    expect(relTypes).toContain("GENERATED_BY");
+    expect(relTypes).toContain("INFORMED_BY");
   });
 });

@@ -446,37 +446,65 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
             ))}
           </svg>
 
-          {/* WorkflowRun node cards */}
-          {layout.workflowNodes.map((wf) => (
-            <div
-              key={`wf-${wf.id}`}
-              data-node
-              data-testid={`workflow-node-${wf.id}`}
-              style={{
-                position: "absolute",
-                left: wf.x,
-                top: wf.y,
-                width: NODE_W,
-                height: NODE_H,
-              }}
-              className="rounded-lg border border-dashed border-amber-800/60 bg-[#111111] px-3 py-2 flex flex-col justify-between select-none cursor-pointer hover:border-amber-600/60 transition-colors"
-              onClick={() => router.push(`/workflow-run/${wf.id}`)}
-              role="button"
-              aria-label={`View WorkflowRun: ${wf.parentName}`}
-            >
-              <div className="flex items-start justify-between gap-1">
-                <span className="text-[10px] font-medium text-amber-400/80 leading-tight line-clamp-2 flex-1 min-w-0">
-                  {wf.parentName}
-                </span>
-                <span className="flex-shrink-0 text-[8px] font-medium text-amber-700 bg-amber-950/60 border border-amber-800/40 rounded px-1 py-0.5 leading-none ml-1 mt-0.5">
-                  RUN
+          {/* Cross-parent node cards (WorkflowRun / DatasetSnapshot) */}
+          {layout.workflowNodes.map((cp) => {
+            const isDataset = cp.parentType === "DatasetSnapshot";
+            return (
+              <div
+                key={`cp-${cp.id}`}
+                data-node
+                data-testid={isDataset ? `dataset-node-${cp.id}` : `workflow-node-${cp.id}`}
+                style={{
+                  position: "absolute",
+                  left: cp.x,
+                  top: cp.y,
+                  width: NODE_W,
+                  height: NODE_H,
+                }}
+                className={[
+                  "rounded-lg border bg-[#111111] px-3 py-2 flex flex-col justify-between select-none cursor-pointer transition-colors",
+                  isDataset
+                    ? "border-emerald-800/60 hover:border-emerald-600/60"
+                    : "border-dashed border-amber-800/60 hover:border-amber-600/60",
+                ].join(" ")}
+                onClick={() =>
+                  router.push(
+                    isDataset
+                      ? `/dataset-snapshot/${cp.id}`
+                      : `/workflow-run/${cp.id}`
+                  )
+                }
+                role="button"
+                aria-label={`View ${cp.parentType}: ${cp.parentName}`}
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <span
+                    className={`text-[10px] font-medium leading-tight line-clamp-2 flex-1 min-w-0 ${
+                      isDataset ? "text-emerald-400/80" : "text-amber-400/80"
+                    }`}
+                  >
+                    {cp.parentName}
+                  </span>
+                  <span
+                    className={`flex-shrink-0 text-[8px] font-medium rounded px-1 py-0.5 leading-none ml-1 mt-0.5 ${
+                      isDataset
+                        ? "text-emerald-700 bg-emerald-950/60 border border-emerald-800/40"
+                        : "text-amber-700 bg-amber-950/60 border border-amber-800/40"
+                    }`}
+                  >
+                    {isDataset ? "DATA" : "RUN"}
+                  </span>
+                </div>
+                <span
+                  className={`text-[8px] font-medium mt-1 ${
+                    isDataset ? "text-emerald-800" : "text-amber-800"
+                  }`}
+                >
+                  {cp.relationType}
                 </span>
               </div>
-              <span className="text-[8px] text-amber-800 font-medium mt-1">
-                {wf.relationType}
-              </span>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Artifact node cards */}
           {layout.nodes.map((node) => {
