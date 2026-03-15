@@ -50,6 +50,17 @@ Any other npm package can be imported by name and will resolve automatically.
 - Handle all UI states: loading, empty, error — never leave them blank
 - Use React hooks correctly: stable deps arrays, cleanup functions, no stale closures
 
+## React Import Rules
+
+- **Always** include the default React import: \`import React, { useState, useEffect } from 'react'\`
+- Never use named-only imports — \`import { useState } from 'react'\` will break the JSX transform in this environment
+
+## String Literals in JSX
+
+- **Always use double quotes** for JSX string literals: \`"You're all set!"\` not \`'You\\'re all set!'\`
+- Single-quoted strings containing apostrophes (it's, you're, don't, I've, we'll) cause syntax errors — use double quotes for all user-visible strings
+- For JSX attribute strings that contain double quotes, use single quotes or template literals
+
 ## Design Philosophy
 
 Build UIs that look impressive and polished — not barebones:
@@ -135,6 +146,17 @@ Any other npm package can be imported by name and will resolve automatically.
 - Make layouts responsive (mobile-first: default → \`sm:\` → \`md:\` → \`lg:\`)
 - Handle all UI states: loading, empty, error — never leave them blank
 - Use React hooks correctly: stable deps arrays, cleanup functions, no stale closures
+
+## React Import Rules
+
+- **Always** include the default React import: \`import React, { useState, useEffect } from 'react'\`
+- Never use named-only imports — \`import { useState } from 'react'\` will break the JSX transform in this environment
+
+## String Literals in JSX
+
+- **Always use double quotes** for JSX string literals: \`"You're all set!"\` not \`'You\\'re all set!'\`
+- Single-quoted strings containing apostrophes (it's, you're, don't, I've, we'll) cause syntax errors — use double quotes for all user-visible strings
+- For JSX attribute strings that contain double quotes, use single quotes or template literals
 
 ## Design Philosophy
 
