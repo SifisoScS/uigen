@@ -10,14 +10,20 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     publicArtifact: { findUnique: vi.fn() },
     agentInvocation: { create: vi.fn() },
+    artifactRelation: { create: vi.fn() },
     governanceEvent: { create: vi.fn() },
   },
+}));
+
+vi.mock("@/lib/agent-reputation", () => ({
+  getAgentReputationScore: vi.fn(),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
+const { getAgentReputationScore } = await import("@/lib/agent-reputation");
 const { coordinateCritiques } = await import("../coordinate-critiques");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -66,7 +72,12 @@ beforeEach(() => {
   vi.mocked(getSession).mockResolvedValue(SESSION);
   vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(ARTIFACT as never);
   vi.mocked(prisma.agentInvocation.create).mockResolvedValue(INVOCATION as never);
+  vi.mocked(prisma.artifactRelation.create).mockResolvedValue({ id: "rel-1" } as never);
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
+  // Default: Claude=0.9, Grok=0.85, unknown=0.7
+  vi.mocked(getAgentReputationScore).mockImplementation(async (name: string) =>
+    name === "Claude" ? 0.9 : name === "Grok" ? 0.85 : 0.7
+  );
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -180,5 +191,74 @@ describe("coordinateCritiques", () => {
     });
 
     expect(result.invocationId).toBe("inv-merged-1");
+  });
+
+  // ── Reputation-weighted behaviour ─────────────────────────────────────────
+
+  it("weightedSuggestions are sorted by score descending (higher-rep agent first)", async () => {
+    const result = await coordinateCritiques({
+      artifactId: "art-1",
+      agentCritiques: [CLAUDE_CRITIQUE, GROK_CRITIQUE],
+    });
+
+    const scores = result.mergedCritique.weightedSuggestions.map((ws) => ws.score);
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
+    }
+  });
+
+  it("shared suggestion has contributors from all agents that proposed it", async () => {
+    const result = await coordinateCritiques({
+      artifactId: "art-1",
+      agentCritiques: [CLAUDE_CRITIQUE, GROK_CRITIQUE],
+    });
+
+    // "Add aria-label" appears in both CLAUDE_CRITIQUE and GROK_CRITIQUE
+    const shared = result.mergedCritique.weightedSuggestions.find(
+      (ws) => ws.text === "Add aria-label"
+    );
+    expect(shared).toBeDefined();
+    expect(shared!.contributors).toContain("Claude");
+    expect(shared!.contributors).toContain("Grok");
+    // Score should be max of Claude(0.9) and Grok(0.85) = 0.9
+    expect(shared!.score).toBe(0.9);
+  });
+
+  it("topAgentName reflects the agent with the highest reputation score", async () => {
+    const result = await coordinateCritiques({
+      artifactId: "art-1",
+      agentCritiques: [CLAUDE_CRITIQUE, GROK_CRITIQUE],
+    });
+
+    // Claude=0.9 > Grok=0.85 → topAgentName should be "Claude"
+    expect(result.mergedCritique.topAgentName).toBe("Claude");
+  });
+
+  it("logs topAgentName and topAgentScore in the governance event details", async () => {
+    await coordinateCritiques({
+      artifactId: "art-1",
+      agentCritiques: [CLAUDE_CRITIQUE, GROK_CRITIQUE],
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          details: expect.objectContaining({
+            topAgentName: "Claude",
+            topAgentScore: 0.9,
+          }),
+        }),
+      })
+    );
+  });
+
+  it("calls getAgentReputationScore for each unique contributing agent", async () => {
+    await coordinateCritiques({
+      artifactId: "art-1",
+      agentCritiques: [CLAUDE_CRITIQUE, GROK_CRITIQUE],
+    });
+
+    expect(getAgentReputationScore).toHaveBeenCalledWith("Claude");
+    expect(getAgentReputationScore).toHaveBeenCalledWith("Grok");
   });
 });

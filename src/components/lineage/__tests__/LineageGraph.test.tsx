@@ -482,6 +482,54 @@ describe("LineageGraph", () => {
     expect(node.textContent).toContain("MERGED");
   });
 
+  it("renders a merge-node when crossParents contains a CRITIQUE_MERGED_INTO AgentInvocation", () => {
+    const mergeParent: CrossParentNode = {
+      id: "inv-merge-1",
+      parentType: "AgentInvocation",
+      parentName: "Grok",
+      outputSummary: "Add aria-label to interactive elements",
+      relationType: "CRITIQUE_MERGED_INTO",
+      createdAt: new Date("2026-01-01"),
+    };
+    const data = makeData("cur", { crossParents: [mergeParent] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    expect(screen.getByTestId("merge-node-inv-merge-1")).toBeDefined();
+  });
+
+  it("merge node shows MERGE badge", () => {
+    const mergeParent: CrossParentNode = {
+      id: "inv-merge-badge",
+      parentType: "AgentInvocation",
+      parentName: "Grok",
+      outputSummary: null,
+      relationType: "CRITIQUE_MERGED_INTO",
+      createdAt: new Date("2026-01-01"),
+    };
+    const data = makeData("cur", { crossParents: [mergeParent] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    expect(screen.getByTestId("merge-node-inv-merge-badge").textContent).toContain("MERGE");
+  });
+
+  it("clicking a merge node navigates to /agent-invocation/[id]", async () => {
+    const user = userEvent.setup();
+    const mergeParent: CrossParentNode = {
+      id: "inv-merge-42",
+      parentType: "AgentInvocation",
+      parentName: "Grok",
+      outputSummary: null,
+      relationType: "CRITIQUE_MERGED_INTO",
+      createdAt: new Date("2026-01-01"),
+    };
+    const data = makeData("cur", { crossParents: [mergeParent] });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    await user.click(screen.getByTestId("merge-node-inv-merge-42"));
+
+    expect(mockPush).toHaveBeenCalledWith("/agent-invocation/inv-merge-42");
+  });
+
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {
     const dsParent: CrossParentNode = {
       id: "ds-badge",

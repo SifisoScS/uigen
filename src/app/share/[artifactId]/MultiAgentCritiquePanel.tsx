@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bot, Sparkles, Loader2, CheckSquare, GitMerge } from "lucide-react";
 import { critiqueArtifact, type AggregatedCritique } from "@/actions/critique-artifact";
 import { generateSelectedVariants } from "@/actions/generate-selected-variants";
-import { coordinateCritiques, type MergedCritique } from "@/actions/coordinate-critiques";
+import { coordinateCritiques, type MergedCritique, type WeightedSuggestion } from "@/actions/coordinate-critiques";
 
 interface FlatSuggestion {
   text: string;
@@ -92,6 +92,26 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
         setMerged(result.mergedCritique);
       } catch (err) {
         setCoordinateError(err instanceof Error ? err.message : "Coordination failed");
+      }
+    });
+  }
+
+  function handleUseMerged() {
+    if (!merged) return;
+    const suggestions = merged.weightedSuggestions.map((ws: WeightedSuggestion) => ({
+      text: ws.text,
+      agentName: merged.topAgentName,
+    }));
+    if (suggestions.length === 0) return;
+
+    setGenerateError(null);
+    startGenerate(async () => {
+      try {
+        await generateSelectedVariants({ artifactId, suggestions });
+        setGenerated(true);
+        router.refresh();
+      } catch (err) {
+        setGenerateError(err instanceof Error ? err.message : "Generation failed");
       }
     });
   }
@@ -238,14 +258,47 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
               <p className="text-[10px] font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1">
                 <GitMerge className="h-3 w-3" />
                 Coordinated by {merged.mergedBy}
+                {merged.topAgentName && merged.topAgentName !== merged.mergedBy && (
+                  <span className="ml-1 text-indigo-600 normal-case">
+                    · led by {merged.topAgentName}
+                  </span>
+                )}
               </p>
-              <div className="flex flex-col gap-1">
-                {merged.suggestions.map((s, i) => (
-                  <p key={i} className="text-[11px] text-neutral-300 leading-snug">
-                    • {s}
-                  </p>
+              <div className="flex flex-col gap-1.5">
+                {merged.weightedSuggestions.map((ws, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <p className="text-[11px] text-neutral-300 leading-snug flex-1">
+                      • {ws.text}
+                    </p>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {ws.contributors.length > 1 && (
+                        <span className="text-[8px] text-indigo-600 font-mono bg-indigo-950/40 border border-indigo-800/30 px-1 py-0.5 rounded">
+                          ×{ws.contributors.length}
+                        </span>
+                      )}
+                      <span
+                        data-testid={`merged-score-${i}`}
+                        className="text-[9px] font-mono text-indigo-500 bg-indigo-950/40 border border-indigo-800/30 px-1 py-0.5 rounded"
+                      >
+                        {ws.score.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
                 ))}
               </div>
+              <button
+                onClick={handleUseMerged}
+                disabled={isGenerating || generated}
+                data-testid="use-merged-btn"
+                className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-950/40 border border-indigo-700/40 text-indigo-300 hover:bg-indigo-900/40 hover:border-indigo-600/50 transition-colors disabled:opacity-50 mt-1"
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <GitMerge className="h-3 w-3" />
+                )}
+                {generated ? "Variants generated" : "Use merged"}
+              </button>
             </div>
           )}
 
