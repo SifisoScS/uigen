@@ -7,6 +7,7 @@ import { ManifestViewer } from "./ManifestViewer";
 import { AncestryChain } from "@/components/AncestryChain";
 import { ArtifactIntrospection } from "./ArtifactIntrospection";
 import { VariantApprovalCard } from "./VariantApprovalCard";
+import { MultiAgentCritiquePanel } from "./MultiAgentCritiquePanel";
 import { getArtifactLineage } from "@/actions/get-artifact-lineage";
 import { getArtifactLineageDeep } from "@/actions/get-artifact-lineage";
 
@@ -165,6 +166,9 @@ export default async function SharePage({
             } | null
           }
         />
+
+        {/* Multi-agent critique & variant selection */}
+        <MultiAgentCritiquePanel artifactId={artifactId} />
 
         {/* Ancestry chain */}
         <AncestryChain parent={lineage.parent} remixedInto={lineage.children} />
