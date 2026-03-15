@@ -10,6 +10,7 @@ interface FlatSuggestion {
   text: string;
   agentName: string;
   priority: number;
+  finalScore: number;
   /** Stable unique key built from agent index + suggestion index. */
   index: number;
 }
@@ -18,6 +19,12 @@ function agentBadgeClass(agentName: string): string {
   return agentName === "Claude"
     ? "text-violet-400 bg-violet-950/40 border-violet-800/40"
     : "text-blue-400 bg-blue-950/40 border-blue-800/40";
+}
+
+function priorityBadgeClass(priority: number): string {
+  if (priority === 1) return "text-red-400 bg-red-950/40 border-red-800/40";
+  if (priority === 2) return "text-orange-400 bg-orange-950/40 border-orange-800/40";
+  return "text-green-400 bg-green-950/40 border-green-800/40";
 }
 
 export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) {
@@ -31,12 +38,14 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
   const [isGenerating, startGenerate] = useTransition();
 
   // Flatten all agent suggestions into a stable indexed list
+  // critiques arrive pre-sorted by finalScore descending from the server action
   const flatSuggestions: FlatSuggestion[] = critiques
     ? critiques.flatMap((c, agentIdx) =>
         c.suggestions.map((text, suggIdx) => ({
           text,
           agentName: c.agentName,
           priority: c.priority,
+          finalScore: c.finalScore,
           index: agentIdx * 1000 + suggIdx,
         }))
       )
@@ -163,8 +172,19 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
                 >
                   {s.agentName}
                 </span>
-                <span className="text-[9px] text-neutral-600 font-mono">
+                <span
+                  data-testid={`priority-badge-${s.index}`}
+                  className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${priorityBadgeClass(
+                    s.priority
+                  )}`}
+                >
                   P{s.priority}
+                </span>
+                <span
+                  data-testid={`score-pill-${s.index}`}
+                  className="text-[9px] text-neutral-500 font-mono bg-[#1a1a1a] border border-[#2a2a2a] px-1 py-0.5 rounded"
+                >
+                  {s.finalScore.toFixed(2)}
                 </span>
               </div>
             </label>
