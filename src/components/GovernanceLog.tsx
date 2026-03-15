@@ -56,6 +56,7 @@ function eventLabel(type: string): string {
     case "ARTIFACT_EMBEDDING_GENERATED":     return "Embedding generated";
     case "EXTERNAL_ARTIFACT_LINKED":         return "External link created";
     case "EXTERNAL_LINEAGE_SYNCED":          return "External lineage synced";
+    case "SEMANTIC_TRANSFORM_RECORDED":      return "Transform recorded";
     default:                                 return type;
   }
 }
@@ -93,6 +94,7 @@ function eventAccent(type: string): string {
     case "ARTIFACT_EMBEDDING_GENERATED":     return "text-fuchsia-400";
     case "EXTERNAL_ARTIFACT_LINKED":         return "text-cyan-300";
     case "EXTERNAL_LINEAGE_SYNCED":          return "text-cyan-500";
+    case "SEMANTIC_TRANSFORM_RECORDED":      return "text-amber-300";
     default:                                 return "text-neutral-400";
   }
 }

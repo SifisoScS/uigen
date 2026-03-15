@@ -227,6 +227,20 @@ model AgentRole {
   @@index([role])
 }
 
+model SemanticTransform {
+  id                String   @id @default(cuid())
+  fromArtifactId    String
+  toArtifactId      String   @unique
+  addedComponents   String[]
+  removedComponents String[]
+  modifiedProps     Json
+  a11yDelta         Int      @default(0)
+  linesChanged      Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  @@index([fromArtifactId])
+}
+
 model ArtifactEmbedding {
   id           String   @id @default(cuid())
   artifactId   String   @unique

@@ -13,6 +13,7 @@ vi.mock("@/lib/prisma", () => ({
     publicArtifact: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     evaluationRun: { findFirst: vi.fn() },
     governanceEvent: { create: vi.fn() },
+    semanticTransform: { create: vi.fn() },
   },
 }));
 
@@ -69,6 +70,7 @@ const ORIGINAL_ARTIFACT = {
   projectId: "orig-proj-1",
   description: null,
   manifest: { registryTags: ["ui", "form"] },
+  filesData: JSON.stringify({ "/App.jsx": { type: "file", name: "App.jsx", path: "/App.jsx", content: "<Button />" } }),
 };
 
 const NEW_ARTIFACT = {
@@ -95,6 +97,7 @@ beforeEach(() => {
   vi.mocked(prisma.evaluationRun.findFirst).mockResolvedValue(null); // no evaluation = allowed
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
   vi.mocked(prisma.artifactRelation.upsert).mockResolvedValue({ id: "rel-2" } as never);
+  vi.mocked(prisma.semanticTransform.create).mockResolvedValue({ id: "st-1" } as never);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -260,5 +263,39 @@ describe("publishVariantAsArtifact", () => {
         }),
       })
     );
+  });
+
+  it("creates a SemanticTransform record linking fromArtifactId to toArtifactId", async () => {
+    await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+
+    expect(prisma.semanticTransform.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          fromArtifactId: "art-1",
+          toArtifactId: "art-2",
+          addedComponents: expect.any(Array),
+          removedComponents: expect.any(Array),
+          a11yDelta: expect.any(Number),
+          linesChanged: expect.any(Number),
+        }),
+      })
+    );
+  });
+
+  it("logs SEMANTIC_TRANSFORM_RECORDED governance event", async () => {
+    await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+
+    const calls = vi.mocked(prisma.governanceEvent.create).mock.calls;
+    const semanticCall = calls.find(
+      (c) => (c[0] as { data: { type: string } }).data.type === "SEMANTIC_TRANSFORM_RECORDED"
+    );
+    expect(semanticCall).toBeDefined();
+    expect((semanticCall![0] as unknown as { data: { details: { fromArtifactId: string } } }).data.details.fromArtifactId).toBe("art-1");
   });
 });
