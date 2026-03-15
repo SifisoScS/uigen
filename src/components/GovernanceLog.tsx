@@ -54,6 +54,8 @@ function eventLabel(type: string): string {
     case "AGENT_SPECIALIZATION_ANALYZED":    return "Specialization analyzed";
     case "AGENT_ROLE_ASSIGNED":              return "Role assigned";
     case "ARTIFACT_EMBEDDING_GENERATED":     return "Embedding generated";
+    case "EXTERNAL_ARTIFACT_LINKED":         return "External link created";
+    case "EXTERNAL_LINEAGE_SYNCED":          return "External lineage synced";
     default:                                 return type;
   }
 }
@@ -89,6 +91,8 @@ function eventAccent(type: string): string {
     case "AGENT_SPECIALIZATION_ANALYZED":    return "text-sky-300";
     case "AGENT_ROLE_ASSIGNED":              return "text-violet-400";
     case "ARTIFACT_EMBEDDING_GENERATED":     return "text-fuchsia-400";
+    case "EXTERNAL_ARTIFACT_LINKED":         return "text-cyan-300";
+    case "EXTERNAL_LINEAGE_SYNCED":          return "text-cyan-500";
     default:                                 return "text-neutral-400";
   }
 }
