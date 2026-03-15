@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { Package, Tag, GitBranch, Calendar, User, GitFork, Workflow, Database } from "lucide-react";
+import { Package, Tag, GitBranch, Calendar, User, GitFork, Workflow, Database, Layers } from "lucide-react";
 import { RemixButton } from "./RemixButton";
 import { ManifestViewer } from "./ManifestViewer";
 import { AncestryChain } from "@/components/AncestryChain";
 import { ArtifactIntrospection } from "./ArtifactIntrospection";
+import { VariantApprovalCard } from "./VariantApprovalCard";
 import { getArtifactLineage } from "@/actions/get-artifact-lineage";
 import { getArtifactLineageDeep } from "@/actions/get-artifact-lineage";
 
@@ -54,6 +55,7 @@ export default async function SharePage({
     getArtifactLineageDeep(artifactId, 1).catch(() => null),
   ]);
   const crossParents = deep?.crossParents ?? [];
+  const variants = deep?.variants ?? [];
   const tags = Array.isArray(manifest.registryTags)
     ? (manifest.registryTags as string[])
     : [];
@@ -204,6 +206,30 @@ export default async function SharePage({
               })}
             </div>
           </div>
+        )}
+
+        {/* Variant Projects (auto-generated from critique suggestions) */}
+        {variants.length > 0 && (
+          <section aria-label="Variant Projects" data-testid="variants-section">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3 flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5" />
+              Agent-generated variants
+              <span className="ml-1 text-neutral-700 text-[10px] normal-case font-normal">
+                ({variants.length})
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {variants.map((v) => (
+                <VariantApprovalCard
+                  key={v.id}
+                  variantId={v.id}
+                  suggestion={v.suggestion}
+                  variantName={v.name}
+                  initialStatus={v.status}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Full lineage graph link */}

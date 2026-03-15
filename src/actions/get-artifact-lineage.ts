@@ -106,6 +106,8 @@ export interface VariantNode {
   id: string;
   name: string;
   suggestion: string | null;
+  /** Approval status: "DRAFT" | "APPROVED" | "REJECTED" */
+  status: string;
   createdAt: Date;
 }
 
@@ -308,7 +310,7 @@ export async function getArtifactLineageDeep(
   for (const rel of variantRelations) {
     const project = await prisma.project.findUnique({
       where: { id: rel.childId },
-      select: { id: true, name: true, createdAt: true },
+      select: { id: true, name: true, status: true, createdAt: true },
     });
     if (project) {
       // Extract suggestion hint from project name (after " — ")
@@ -318,6 +320,7 @@ export async function getArtifactLineageDeep(
         id: project.id,
         name: project.name,
         suggestion,
+        status: project.status,
         createdAt: project.createdAt,
       });
     }

@@ -30,6 +30,9 @@ model Project {
   data                 String   @default("{}")
   forkedFromSnapshotId   String?
   remixedFromArtifactId  String?  // PublicArtifact.id this project was remixed from
+  status               String   @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
+  approvedAt           DateTime?
+  approvedBy           String?  // userId of approver
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
