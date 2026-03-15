@@ -54,7 +54,7 @@ export async function coordinateCritiques({
     data: {
       agentName: "Grok",
       prompt: "Merge multi-agent critiques",
-      critiqueJson: merged,
+      critiqueJson: merged as never,
     },
   });
 
