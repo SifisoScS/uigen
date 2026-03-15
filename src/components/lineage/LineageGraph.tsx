@@ -150,6 +150,22 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
   };
 }
 
+// ── Color swatch helper ───────────────────────────────────────────────────────
+
+const TAILWIND_HEX: Record<string, string> = {
+  slate: "#64748b", gray: "#6b7280", zinc: "#71717a", neutral: "#737373",
+  stone: "#78716c", red: "#ef4444", orange: "#f97316", amber: "#f59e0b",
+  yellow: "#eab308", lime: "#84cc16", green: "#22c55e", emerald: "#10b981",
+  teal: "#14b8a6", cyan: "#06b6d4", sky: "#0ea5e9", blue: "#3b82f6",
+  indigo: "#6366f1", violet: "#8b5cf6", purple: "#a855f7", fuchsia: "#d946ef",
+  pink: "#ec4899", rose: "#f43f5e",
+};
+
+function colorClassToHex(cls: string): string | null {
+  const m = cls.match(/(?:bg|text|border|ring|from|to|via)-([a-z]+)-\d+/);
+  return m ? (TAILWIND_HEX[m[1]] ?? null) : null;
+}
+
 // ── Policy badge helpers ──────────────────────────────────────────────────────
 
 function policyLabel(p: string | null): string {
@@ -554,8 +570,19 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                   </p>
                 )}
 
-                {/* Policy badge + remix count + current label */}
+                {/* Policy badge + remix count + current label + color swatch */}
                 <div className="flex items-center gap-1 mt-1 flex-wrap">
+                  {node.firstColor && (() => {
+                    const hex = colorClassToHex(node.firstColor);
+                    return hex ? (
+                      <span
+                        data-testid={`color-swatch-${node.id}`}
+                        style={{ background: hex }}
+                        className="w-2 h-2 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                        title={node.firstColor}
+                      />
+                    ) : null;
+                  })()}
                   {node.policyType && (
                     <span
                       style={{

@@ -46,6 +46,7 @@ function makeDeepRaw(
     version?: string;
     parentArtifactId?: string | null;
     semanticSummary?: string | null;
+    styleSignature?: unknown;
   } = {}
 ) {
   return {
@@ -59,6 +60,7 @@ function makeDeepRaw(
     parentArtifactId: opts.parentArtifactId ?? null,
     manifest: { governancePolicy: { policyType: "HUMAN_ONLY" } },
     semanticSummary: opts.semanticSummary ?? null,
+    styleSignature: opts.styleSignature ?? null,
   };
 }
 
@@ -364,6 +366,43 @@ describe("getArtifactLineageDeep", () => {
     const result = await getArtifactLineageDeep("art-no-summary");
 
     expect(result.current.semanticSummary).toBeNull();
+  });
+
+  it("extracts firstColor from styleSignature.colors[0]", async () => {
+    const raw = makeDeepRaw("art-color", {
+      styleSignature: { colors: ["bg-violet-500", "text-neutral-100"], spacing: ["gap-4"] },
+    });
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art-color");
+
+    expect(result.current.firstColor).toBe("bg-violet-500");
+  });
+
+  it("returns null firstColor when styleSignature has no colors", async () => {
+    const raw = makeDeepRaw("art-no-color", {
+      styleSignature: { colors: [], spacing: ["gap-4"] },
+    });
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art-no-color");
+
+    expect(result.current.firstColor).toBeNull();
+  });
+
+  it("returns null firstColor when styleSignature is null", async () => {
+    const raw = makeDeepRaw("art-null-sig");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art-null-sig");
+
+    expect(result.current.firstColor).toBeNull();
   });
 
   it("skips DatasetSnapshot ArtifactRelation rows where snapshot is not found", async () => {

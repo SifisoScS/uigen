@@ -43,34 +43,129 @@ function computePolicyHash(policy: Record<string, unknown>): string {
 
 // ── Introspection helpers ─────────────────────────────────────────────────────
 
+interface FileEntry { path: string; content: string }
+
+function walkVirtualFS(node: unknown): FileEntry[] {
+  if (!node || typeof node !== "object") return [];
+  const n = node as Record<string, unknown>;
+  const files: FileEntry[] = [];
+  if (n.type === "file" && typeof n.path === "string" && typeof n.content === "string") {
+    files.push({ path: n.path, content: n.content });
+  }
+  if (n.children && typeof n.children === "object") {
+    for (const child of Object.values(n.children as Record<string, unknown>)) {
+      files.push(...walkVirtualFS(child));
+    }
+  }
+  return files;
+}
+
+function findMainFile(filesData: string): FileEntry | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(filesData); } catch { return null; }
+  const files = walkVirtualFS(parsed);
+  return (
+    files.find((f) => /\bApp\.tsx?$/.test(f.path)) ??
+    files.find((f) => f.path.endsWith(".tsx")) ??
+    files.find((f) => f.path.endsWith(".jsx")) ??
+    null
+  );
+}
+
+interface TreeNode { type: string; props: Record<string, string>; children: TreeNode[] }
+
+function extractJSXTree(content: string): TreeNode {
+  const returnIdx = content.search(/\breturn\s*[\s(]/);
+  const jsx = returnIdx >= 0 ? content.slice(returnIdx) : content;
+
+  // Collect opening JSX tags (depth-limited to first 8 elements)
+  const tagRe = /<([A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)(\s[^>]*)?\s*\/?>/g;
+  type RawTag = { type: string; className?: string };
+  const tags: RawTag[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(jsx)) !== null && tags.length < 8) {
+    const attrs = m[2] ?? "";
+    const classMatch = attrs.match(/className=["']([^"']*)["']/);
+    tags.push({ type: m[1], className: classMatch?.[1]?.slice(0, 120) });
+  }
+
+  if (tags.length === 0) return { type: "unknown", props: {}, children: [] };
+  const [root, ...rest] = tags;
+  return {
+    type: root.type,
+    props: root.className ? { className: root.className } : {},
+    children: rest.slice(0, 5).map((t) => ({
+      type: t.type,
+      props: t.className ? { className: t.className } : ({} as Record<string, string>),
+      children: [] as TreeNode[],
+    })),
+  };
+}
+
+function generateComponentTree(name: string, filesData: string): object {
+  const main = findMainFile(filesData);
+  if (!main) return { type: "component", name, props: {}, children: [], _stub: true };
+  return { ...extractJSXTree(main.content), _source: main.path };
+}
+
 function generateSemanticSummary(
   name: string,
   description: string | undefined,
+  filesData: string,
   tags: string[]
 ): string {
   if (description && description.length > 10) return description;
-  const tagHint = tags.length > 0 ? ` with ${tags.slice(0, 3).join(", ")}` : "";
-  return `Modern ${name} component${tagHint}`;
-}
 
-function generateComponentTree(name: string): object {
-  return { type: "component", name, props: {}, children: [], _stub: true };
+  // Walk the virtual FS to get actual content for feature detection
+  let parsed: unknown;
+  try { parsed = JSON.parse(filesData); } catch { /* ignore */ }
+  const allContent = parsed ? walkVirtualFS(parsed).map((f) => f.content).join("\n") : filesData;
+
+  const features: string[] = [];
+  if (/\bsm:|md:|lg:|xl:/.test(allContent))    features.push("responsive");
+  if (/\bdark:/.test(allContent))               features.push("dark mode");
+  if (/useState|useReducer/.test(allContent))   features.push("interactive");
+  if (/onSubmit|handleSubmit/.test(allContent)) features.push("form");
+  if (/\bgrid\b/.test(allContent))              features.push("grid");
+
+  const main = findMainFile(filesData);
+  let rootType = "";
+  if (main) {
+    const match = main.content.match(/return\s*[\s(]*<([A-Z][A-Za-z0-9.]*|[a-z][a-z0-9-]*)/);
+    if (match) rootType = match[1];
+  }
+
+  const tagHint      = tags.slice(0, 2).join(", ");
+  const featureHint  = features.slice(0, 3).join(", ");
+  const rootHint     = rootType && rootType.toLowerCase() !== name.toLowerCase() ? rootType : "";
+  const parts        = [rootHint, featureHint, tagHint].filter(Boolean).join(" · ");
+  return parts ? `${name} — ${parts}` : `${name} component`;
 }
 
 function extractStyleSignature(filesData: string): {
+  classes: string[];
   colors: string[];
   spacing: string[];
 } {
-  const colorMatches = [
-    ...filesData.matchAll(/\b(?:bg|text|border|ring)-(?:[a-z]+-\d{3}|[a-z]+)\b/g),
-  ].map((m) => m[0]);
-  const spacingMatches = [
-    ...filesData.matchAll(/\b(?:gap|p|px|py|pt|pb|m|mx|my|mt|mb)-\d+\b/g),
-  ].map((m) => m[0]);
-  return {
-    colors: [...new Set(colorMatches)].slice(0, 10),
-    spacing: [...new Set(spacingMatches)].slice(0, 10),
-  };
+  // Walk the virtual FS so we search actual file content, not the JSON-encoded representation
+  let parsed: unknown;
+  try { parsed = JSON.parse(filesData); } catch { return { classes: [], colors: [], spacing: [] }; }
+  const allContent = walkVirtualFS(parsed).map((f) => f.content).join("\n");
+
+  // Extract class tokens from className="..." strings only (avoids false positives)
+  const classStrings = [...allContent.matchAll(/className=["']([^"']*)["']/g)].map((m) => m[1]);
+  const allClasses = classStrings.flatMap((s) => s.split(/\s+/).filter(Boolean));
+
+  const colorRe   = /^(?:bg|text|border|ring|fill|stroke|from|to|via)-(?:[a-z]+-\d{2,3}|[a-z]+)$/;
+  const spacingRe = /^(?:gap|p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|space-[xy])-(?:\d+|\[[\d.]+(?:px|rem|em)\])$/;
+
+  const colors  = [...new Set(allClasses.filter((c) => colorRe.test(c)))].slice(0, 12);
+  const spacing = [...new Set(allClasses.filter((c) => spacingRe.test(c)))].slice(0, 12);
+  const classes = [...new Set(allClasses)]
+    .filter((c) => !colorRe.test(c) && !spacingRe.test(c))
+    .slice(0, 15);
+
+  return { classes, colors, spacing };
 }
 
 export async function publishArtifact({
@@ -136,9 +231,9 @@ export async function publishArtifact({
   // 5. Compute hashes + introspection
   const filesHash = computeFilesHash(project.data);
   const policyHash = computePolicyHash(policy as unknown as Record<string, unknown>);
-  const semanticSummary = generateSemanticSummary(name, description, tags);
-  const componentTree = generateComponentTree(name);
-  const styleSignature = extractStyleSignature(project.data);
+  const semanticSummary = generateSemanticSummary(name, description, project.data, tags);
+  const componentTree   = generateComponentTree(name, project.data);
+  const styleSignature  = extractStyleSignature(project.data);
 
   // 6. Build manifest
   const manifest = {
@@ -203,6 +298,7 @@ export async function publishArtifact({
       details: {
         artifactId: artifact.id,
         summaryExcerpt: semanticSummary.slice(0, 100),
+        classCount: styleSignature.classes.length + styleSignature.colors.length,
       },
     },
   });
