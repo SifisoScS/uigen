@@ -33,6 +33,8 @@ model Project {
   status               String   @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
   approvedAt           DateTime?
   approvedBy           String?  // userId of approver
+  mergedFromVariantId  String?  // variant Project.id that was merged into this project
+  mergedAt             DateTime?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

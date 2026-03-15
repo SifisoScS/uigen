@@ -59,13 +59,15 @@ function makeCrossParent(id: string, name = `Workflow ${id}`): CrossParentNode {
 function makeVariant(
   id: string,
   suggestion = `Suggestion for ${id}`,
-  status = "DRAFT"
+  status = "DRAFT",
+  isMerged = false
 ): VariantNode {
   return {
     id,
     name: `AuthForm — ${suggestion}`,
     suggestion,
     status,
+    isMerged,
     createdAt: new Date("2026-01-01"),
   };
 }
@@ -465,6 +467,16 @@ describe("LineageGraph", () => {
 
     const node = screen.getByTestId("variant-node-var-rej");
     expect(node.getAttribute("data-status")).toBe("REJECTED");
+  });
+
+  it("merged variant node shows MERGED badge text", () => {
+    const data = makeData("cur", {
+      variants: [makeVariant("var-merged", "Improve contrast", "APPROVED", true)],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    const node = screen.getByTestId("variant-node-var-merged");
+    expect(node.textContent).toContain("MERGED");
   });
 
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {

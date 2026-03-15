@@ -190,6 +190,8 @@ describe("POST /api/chat", () => {
         status: "DRAFT",
         approvedAt: null,
         approvedBy: null,
+        mergedFromVariantId: null,
+        mergedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
