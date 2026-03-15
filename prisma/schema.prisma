@@ -98,6 +98,17 @@ model DatasetSnapshot {
   updatedAt     DateTime @updatedAt
 }
 
+model AgentInvocation {
+  id           String   @id @default(cuid())
+  agentName    String   // "Claude", "Grok", "StubAgent", etc.
+  prompt       String
+  critiqueJson Json?    // { suggestions: string[], issues: string[] }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model WorkflowRun {
   id            String   @id @default(cuid())
   name          String
