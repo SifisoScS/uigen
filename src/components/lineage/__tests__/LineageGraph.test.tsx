@@ -56,11 +56,16 @@ function makeCrossParent(id: string, name = `Workflow ${id}`): CrossParentNode {
   };
 }
 
-function makeVariant(id: string, suggestion = `Suggestion for ${id}`): VariantNode {
+function makeVariant(
+  id: string,
+  suggestion = `Suggestion for ${id}`,
+  status = "DRAFT"
+): VariantNode {
   return {
     id,
     name: `AuthForm — ${suggestion}`,
     suggestion,
+    status,
     createdAt: new Date("2026-01-01"),
   };
 }
@@ -440,6 +445,26 @@ describe("LineageGraph", () => {
 
     const node = screen.getByTestId("variant-node-var-txt");
     expect(node.textContent).toContain("Extract theme tokens");
+  });
+
+  it("APPROVED variant node has data-status='APPROVED'", () => {
+    const data = makeData("cur", {
+      variants: [makeVariant("var-appr", "Add aria-label", "APPROVED")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    const node = screen.getByTestId("variant-node-var-appr");
+    expect(node.getAttribute("data-status")).toBe("APPROVED");
+  });
+
+  it("REJECTED variant node has data-status='REJECTED'", () => {
+    const data = makeData("cur", {
+      variants: [makeVariant("var-rej", "Some suggestion", "REJECTED")],
+    });
+    render(<LineageGraph initialData={data} currentId="cur" />);
+
+    const node = screen.getByTestId("variant-node-var-rej");
+    expect(node.getAttribute("data-status")).toBe("REJECTED");
   });
 
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {

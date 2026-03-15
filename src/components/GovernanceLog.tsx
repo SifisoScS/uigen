@@ -33,6 +33,8 @@ function eventLabel(type: string): string {
     case "ARTIFACT_INTROSPECTION_GENERATED": return "Introspection generated";
     case "ARTIFACT_CRITIQUE_CREATED":        return "Critique created";
     case "ARTIFACT_VARIANT_CREATED":         return "Variant created";
+    case "ARTIFACT_VARIANT_APPROVED":        return "Variant approved";
+    case "ARTIFACT_VARIANT_REJECTED":        return "Variant rejected";
     default:                                 return type;
   }
 }
@@ -47,6 +49,8 @@ function eventAccent(type: string): string {
     case "ARTIFACT_INTROSPECTION_GENERATED": return "text-violet-400";
     case "ARTIFACT_CRITIQUE_CREATED":        return "text-orange-400";
     case "ARTIFACT_VARIANT_CREATED":         return "text-neutral-400";
+    case "ARTIFACT_VARIANT_APPROVED":        return "text-emerald-400";
+    case "ARTIFACT_VARIANT_REJECTED":        return "text-red-400";
     default:                                 return "text-neutral-400";
   }
 }

@@ -589,36 +589,63 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
           })}
 
           {/* Variant node cards (NEW_VARIANT_OF) */}
-          {layout.variantNodes.map((v) => (
-            <div
-              key={`var-${v.id}`}
-              data-node
-              data-testid={`variant-node-${v.id}`}
-              style={{
-                position: "absolute",
-                left: v.x,
-                top: v.y,
-                width: NODE_W,
-                height: NODE_H,
-              }}
-              className="rounded-lg border border-dashed border-[#3a3a3a] bg-[#0d0d0d] px-3 py-2 flex flex-col justify-between select-none cursor-pointer transition-colors hover:border-[#4a4a4a]"
-              onClick={() => router.push(`/${v.id}`)}
-              role="button"
-              aria-label={`Open variant: ${v.name}`}
-            >
-              <div className="flex items-start justify-between gap-1">
-                <span className="text-[10px] font-medium text-neutral-500 leading-tight line-clamp-2 flex-1 min-w-0">
-                  {v.suggestion ?? v.name}
-                </span>
-                <span className="flex-shrink-0 text-[8px] font-medium rounded px-1 py-0.5 leading-none ml-1 mt-0.5 text-neutral-600 bg-[#1a1a1a] border border-[#2a2a2a]">
-                  VAR
+          {layout.variantNodes.map((v) => {
+            const isApproved = v.status === "APPROVED";
+            const isRejected = v.status === "REJECTED";
+
+            const borderClass = isApproved
+              ? "border-emerald-700/50 hover:border-emerald-600/70"
+              : isRejected
+              ? "border-red-900/40 hover:border-red-800/50"
+              : "border-[#3a3a3a] hover:border-[#4a4a4a]";
+
+            const textClass = isApproved
+              ? "text-neutral-300"
+              : isRejected
+              ? "text-neutral-600 line-through"
+              : "text-neutral-500";
+
+            const statusBadge = isApproved
+              ? { label: "✓ APPR", cls: "text-emerald-600 bg-emerald-950/60 border-emerald-800/40" }
+              : isRejected
+              ? { label: "✕ REJ", cls: "text-red-700 bg-red-950/60 border-red-800/40" }
+              : { label: "VAR", cls: "text-neutral-600 bg-[#1a1a1a] border-[#2a2a2a]" };
+
+            return (
+              <div
+                key={`var-${v.id}`}
+                data-node
+                data-testid={`variant-node-${v.id}`}
+                data-status={v.status}
+                style={{
+                  position: "absolute",
+                  left: v.x,
+                  top: v.y,
+                  width: NODE_W,
+                  height: NODE_H,
+                }}
+                className={[
+                  "rounded-lg border border-dashed bg-[#0d0d0d] px-3 py-2 flex flex-col justify-between select-none cursor-pointer transition-colors",
+                  borderClass,
+                ].join(" ")}
+                onClick={() => router.push(`/${v.id}`)}
+                role="button"
+                aria-label={`Open variant: ${v.name}`}
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <span className={`text-[10px] font-medium leading-tight line-clamp-2 flex-1 min-w-0 ${textClass}`}>
+                    {v.suggestion ?? v.name}
+                  </span>
+                  <span className={`flex-shrink-0 text-[8px] font-medium rounded px-1 py-0.5 leading-none ml-1 mt-0.5 border ${statusBadge.cls}`}>
+                    {statusBadge.label}
+                  </span>
+                </div>
+                <span className="text-[8px] text-neutral-700 font-medium mt-1">
+                  NEW_VARIANT_OF
                 </span>
               </div>
-              <span className="text-[8px] text-neutral-700 font-medium mt-1">
-                NEW_VARIANT_OF
-              </span>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Artifact node cards */}
           {layout.nodes.map((node) => {
