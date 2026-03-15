@@ -41,6 +41,7 @@ export async function generateSelectedVariants({
       data: {
         name: `${artifact.name} — ${text.slice(0, 50)}`,
         data: artifact.filesData,
+        agentName,
       },
     });
 

@@ -5,6 +5,7 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAgentReputationScore } from "@/lib/agent-reputation";
 
 // ── Critique schema ────────────────────────────────────────────────────────────
 
@@ -167,6 +168,11 @@ export async function critiqueArtifact({
       agents.map((name) => runAgentCritique(name, critiquePrompt, apiKey))
     );
 
+    // Fetch reputations from DB in parallel
+    const reputations = await Promise.all(
+      agents.map((name) => getAgentReputationScore(name))
+    );
+
     // Persist one AgentInvocation per agent and collect aggregated critiques
     const aggregatedCritiques: AggregatedCritique[] = [];
 
@@ -174,7 +180,7 @@ export async function critiqueArtifact({
       const name = agents[i];
       const result = critiqueResults[i];
       const priority = i + 1; // 1-indexed; first agent = highest priority
-      const reputation = AGENT_REPUTATION[name] ?? DEFAULT_REPUTATION;
+      const reputation = reputations[i];
       // Divide by priority so that lower priority number (= more important) yields a higher score
       const finalScore = parseFloat((reputation / priority).toFixed(4));
 
@@ -290,6 +296,7 @@ export async function critiqueArtifact({
       data: {
         name: `${artifact.name} — ${suggestion.slice(0, 50)}`,
         data: artifact.filesData,
+        agentName,
       },
     });
 
@@ -319,7 +326,7 @@ export async function critiqueArtifact({
     variantIds.push(variant.id);
   }
 
-  const reputation = AGENT_REPUTATION[agentName] ?? DEFAULT_REPUTATION;
+  const reputation = await getAgentReputationScore(agentName);
   return {
     invocationId: invocation.id,
     variantIds,

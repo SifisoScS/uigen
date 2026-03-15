@@ -11,6 +11,11 @@ vi.mock("@/lib/prisma", () => ({
     artifactRelation: { findFirst: vi.fn() },
     project: { update: vi.fn() },
     governanceEvent: { create: vi.fn() },
+    agentReputation: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -44,8 +49,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getSession).mockResolvedValue(SESSION);
   vi.mocked(prisma.artifactRelation.findFirst).mockResolvedValue(RELATION as never);
-  vi.mocked(prisma.project.update).mockResolvedValue({ id: "proj-var-1" } as never);
+  vi.mocked(prisma.project.update).mockResolvedValue({ id: "proj-var-1", agentName: null } as never);
   vi.mocked(prisma.governanceEvent.create).mockResolvedValue({ id: "evt-1" } as never);
+  vi.mocked(prisma.agentReputation.upsert).mockResolvedValue({} as never);
+  vi.mocked(prisma.agentReputation.findUnique).mockResolvedValue({
+    id: "rep-1", agentName: "Claude", score: 0.9, approvedCount: 0, rejectedCount: 0, updatedAt: new Date(),
+  } as never);
+  vi.mocked(prisma.agentReputation.update).mockResolvedValue({} as never);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -143,5 +153,27 @@ describe("approveVariant", () => {
         data: expect.objectContaining({ status: "APPROVED" }),
       })
     );
+  });
+
+  it("calls recordVariantOutcome (upserts agentReputation) when variant has agentName", async () => {
+    vi.mocked(prisma.project.update).mockResolvedValue({
+      id: "proj-var-1",
+      agentName: "Claude",
+    } as never);
+
+    await approveVariant("proj-var-1", true);
+
+    expect(prisma.agentReputation.upsert).toHaveBeenCalledOnce();
+  });
+
+  it("skips reputation update when variant has no agentName", async () => {
+    vi.mocked(prisma.project.update).mockResolvedValue({
+      id: "proj-var-1",
+      agentName: null,
+    } as never);
+
+    await approveVariant("proj-var-1", true);
+
+    expect(prisma.agentReputation.upsert).not.toHaveBeenCalled();
   });
 });

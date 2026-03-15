@@ -2,6 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recordVariantOutcome } from "@/lib/agent-reputation";
 
 export type VariantStatus = "DRAFT" | "APPROVED" | "REJECTED";
 
@@ -31,7 +32,7 @@ export async function approveVariant(
 
   const newStatus: VariantStatus = approved ? "APPROVED" : "REJECTED";
 
-  await prisma.project.update({
+  const updatedProject = await prisma.project.update({
     where: { id: projectId },
     data: {
       status: newStatus,
@@ -39,6 +40,15 @@ export async function approveVariant(
       approvedBy: session.userId,
     },
   });
+
+  if (updatedProject.agentName) {
+    await recordVariantOutcome(
+      updatedProject.agentName,
+      approved,
+      projectId,
+      relation.parentId,
+    );
+  }
 
   await prisma.governanceEvent.create({
     data: {
