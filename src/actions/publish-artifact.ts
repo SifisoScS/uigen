@@ -41,6 +41,38 @@ function computePolicyHash(policy: Record<string, unknown>): string {
     .digest("hex");
 }
 
+// ── Introspection helpers ─────────────────────────────────────────────────────
+
+function generateSemanticSummary(
+  name: string,
+  description: string | undefined,
+  tags: string[]
+): string {
+  if (description && description.length > 10) return description;
+  const tagHint = tags.length > 0 ? ` with ${tags.slice(0, 3).join(", ")}` : "";
+  return `Modern ${name} component${tagHint}`;
+}
+
+function generateComponentTree(name: string): object {
+  return { type: "component", name, props: {}, children: [], _stub: true };
+}
+
+function extractStyleSignature(filesData: string): {
+  colors: string[];
+  spacing: string[];
+} {
+  const colorMatches = [
+    ...filesData.matchAll(/\b(?:bg|text|border|ring)-(?:[a-z]+-\d{3}|[a-z]+)\b/g),
+  ].map((m) => m[0]);
+  const spacingMatches = [
+    ...filesData.matchAll(/\b(?:gap|p|px|py|pt|pb|m|mx|my|mt|mb)-\d+\b/g),
+  ].map((m) => m[0]);
+  return {
+    colors: [...new Set(colorMatches)].slice(0, 10),
+    spacing: [...new Set(spacingMatches)].slice(0, 10),
+  };
+}
+
 export async function publishArtifact({
   projectId,
   branchName,
@@ -101,9 +133,12 @@ export async function publishArtifact({
   // Propagate parent lineage when this project was remixed from an artifact
   const parentArtifactId = project.remixedFromArtifactId ?? null;
 
-  // 5. Compute hashes
+  // 5. Compute hashes + introspection
   const filesHash = computeFilesHash(project.data);
   const policyHash = computePolicyHash(policy as unknown as Record<string, unknown>);
+  const semanticSummary = generateSemanticSummary(name, description, tags);
+  const componentTree = generateComponentTree(name);
+  const styleSignature = extractStyleSignature(project.data);
 
   // 6. Build manifest
   const manifest = {
@@ -137,6 +172,9 @@ export async function publishArtifact({
       previewImage: previewImage ?? null,
       authorId: session.userId,
       parentArtifactId,
+      semanticSummary,
+      componentTree,
+      styleSignature,
     },
   });
 
@@ -146,13 +184,26 @@ export async function publishArtifact({
     data: { manifest: { ...manifest, id: artifact.id } },
   });
 
-  // 9. Governance event
+  // 9. Governance event — publish
   await prisma.governanceEvent.create({
     data: {
       projectId,
       type: "ARTIFACT_PUBLISHED",
       actor: session.userId,
       details: { artifactId: artifact.id, version, branchName, name },
+    },
+  });
+
+  // 9b. Governance event — introspection generated
+  await prisma.governanceEvent.create({
+    data: {
+      projectId,
+      type: "ARTIFACT_INTROSPECTION_GENERATED",
+      actor: session.userId,
+      details: {
+        artifactId: artifact.id,
+        summaryExcerpt: semanticSummary.slice(0, 100),
+      },
     },
   });
 

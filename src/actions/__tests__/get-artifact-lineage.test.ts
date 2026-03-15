@@ -41,7 +41,12 @@ function makeSummary(id: string, name = `Artifact ${id}`, version = "1.0.0") {
  */
 function makeDeepRaw(
   id: string,
-  opts: { name?: string; version?: string; parentArtifactId?: string | null } = {}
+  opts: {
+    name?: string;
+    version?: string;
+    parentArtifactId?: string | null;
+    semanticSummary?: string | null;
+  } = {}
 ) {
   return {
     id,
@@ -53,6 +58,7 @@ function makeDeepRaw(
     remixCount: 0,
     parentArtifactId: opts.parentArtifactId ?? null,
     manifest: { governancePolicy: { policyType: "HUMAN_ONLY" } },
+    semanticSummary: opts.semanticSummary ?? null,
   };
 }
 
@@ -334,6 +340,30 @@ describe("getArtifactLineageDeep", () => {
     expect(result.crossParents[0].relationType).toBe("INFORMED_BY");
     expect(result.crossParents[0].parentType).toBe("DatasetSnapshot");
     expect(result.crossParents[0].outputSummary).toBeNull();
+  });
+
+  it("propagates semanticSummary from DB onto ArtifactNode", async () => {
+    const raw = makeDeepRaw("art-summary", {
+      semanticSummary: "Accessible pricing card with annual toggle",
+    });
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art-summary");
+
+    expect(result.current.semanticSummary).toBe("Accessible pricing card with annual toggle");
+  });
+
+  it("returns null semanticSummary when field is not set", async () => {
+    const raw = makeDeepRaw("art-no-summary");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
+
+    const result = await getArtifactLineageDeep("art-no-summary");
+
+    expect(result.current.semanticSummary).toBeNull();
   });
 
   it("skips DatasetSnapshot ArtifactRelation rows where snapshot is not found", async () => {

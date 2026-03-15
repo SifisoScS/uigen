@@ -370,3 +370,94 @@ describe("publishArtifact — DatasetSnapshot linkage", () => {
     expect(relTypes).toContain("INFORMED_BY");
   });
 });
+
+describe("publishArtifact — introspection", () => {
+  it("includes semanticSummary in the created artifact", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "AuthForm",
+      description: "A login form with dark mode",
+      tags: ["auth", "form"],
+    });
+
+    expect(prisma.publicArtifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          semanticSummary: expect.any(String),
+        }),
+      })
+    );
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const data = createCall.data as { semanticSummary?: string };
+    expect(data.semanticSummary).toBeTruthy();
+  });
+
+  it("uses description as semanticSummary when description is substantive", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "MyButton",
+      description: "Accessible button with hover and focus states",
+    });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const data = createCall.data as { semanticSummary?: string };
+    expect(data.semanticSummary).toBe("Accessible button with hover and focus states");
+  });
+
+  it("includes componentTree stub in the created artifact", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "PricingCard",
+    });
+
+    expect(prisma.publicArtifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          componentTree: expect.objectContaining({ type: "component", name: "PricingCard" }),
+        }),
+      })
+    );
+  });
+
+  it("includes styleSignature with colors and spacing arrays", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "MyComponent",
+    });
+
+    expect(prisma.publicArtifact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          styleSignature: expect.objectContaining({
+            colors: expect.any(Array),
+            spacing: expect.any(Array),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("logs ARTIFACT_INTROSPECTION_GENERATED governance event", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "DashboardHeader",
+    });
+
+    expect(prisma.governanceEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "ARTIFACT_INTROSPECTION_GENERATED",
+          details: expect.objectContaining({
+            artifactId: "art-1",
+            summaryExcerpt: expect.any(String),
+          }),
+        }),
+      })
+    );
+  });
+});

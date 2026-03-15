@@ -69,6 +69,7 @@ const DEEP_SELECT = {
   remixCount: true,
   parentArtifactId: true,
   manifest: true,
+  semanticSummary: true,
 } as const;
 
 /** Full node shape used by the lineage graph viewer. */
@@ -82,6 +83,7 @@ export interface ArtifactNode {
   remixCount: number;
   policyType: string | null;
   parentArtifactId: string | null;
+  semanticSummary: string | null;
 }
 
 /** A non-UI parent linked via ArtifactRelation (e.g. the WorkflowRun that generated this artifact). */
@@ -117,6 +119,7 @@ type RawDeep = {
   remixCount: number;
   parentArtifactId: string | null;
   manifest: unknown;
+  semanticSummary: string | null;
 };
 
 function extractPolicyType(manifest: unknown): string | null {
@@ -137,6 +140,7 @@ function toNode(raw: RawDeep): ArtifactNode {
     remixCount: raw.remixCount,
     policyType: extractPolicyType(raw.manifest),
     parentArtifactId: raw.parentArtifactId,
+    semanticSummary: raw.semanticSummary,
   };
 }
 

@@ -29,8 +29,9 @@ function eventLabel(type: string): string {
     case "BRANCH_POLICY_CHANGED":      return "Policy changed";
     case "ARTIFACT_PUBLISHED":         return "Published";
     case "RELEASE_TAG_CREATED":        return "Release created";
-    case "ARTIFACT_RELATION_CREATED":  return "Relation created";
-    default:                           return type;
+    case "ARTIFACT_RELATION_CREATED":        return "Relation created";
+    case "ARTIFACT_INTROSPECTION_GENERATED": return "Introspection generated";
+    default:                                 return type;
   }
 }
 
@@ -40,8 +41,9 @@ function eventAccent(type: string): string {
     case "BRANCH_POLICY_CHANGED":      return "text-amber-400";
     case "ARTIFACT_PUBLISHED":         return "text-emerald-400";
     case "RELEASE_TAG_CREATED":        return "text-purple-400";
-    case "ARTIFACT_RELATION_CREATED":  return "text-amber-300";
-    default:                           return "text-neutral-400";
+    case "ARTIFACT_RELATION_CREATED":        return "text-amber-300";
+    case "ARTIFACT_INTROSPECTION_GENERATED": return "text-violet-400";
+    default:                                 return "text-neutral-400";
   }
 }
 
