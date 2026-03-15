@@ -258,6 +258,28 @@ export async function getArtifactLineageDeep(
           createdAt: ds.createdAt,
         });
       }
+    } else if (rel.parentType === "AgentInvocation") {
+      const inv = await prisma.agentInvocation.findUnique({
+        where: { id: rel.parentId },
+        select: { id: true, agentName: true, critiqueJson: true, createdAt: true },
+      });
+      if (inv) {
+        // Surface first suggestion as outputSummary excerpt
+        const critique = inv.critiqueJson as Record<string, unknown> | null;
+        const suggestions = Array.isArray(critique?.suggestions) ? critique!.suggestions as unknown[] : [];
+        const outputSummary =
+          suggestions.length > 0 && typeof suggestions[0] === "string"
+            ? (suggestions[0] as string).slice(0, 80)
+            : null;
+        crossParents.push({
+          id: inv.id,
+          parentType: "AgentInvocation",
+          parentName: inv.agentName,
+          outputSummary,
+          relationType: rel.relationType,
+          createdAt: inv.createdAt,
+        });
+      }
     }
   }
 

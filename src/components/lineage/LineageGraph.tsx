@@ -462,14 +462,53 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
             ))}
           </svg>
 
-          {/* Cross-parent node cards (WorkflowRun / DatasetSnapshot) */}
+          {/* Cross-parent node cards (WorkflowRun / DatasetSnapshot / AgentInvocation) */}
           {layout.workflowNodes.map((cp) => {
             const isDataset = cp.parentType === "DatasetSnapshot";
+            const isAgent   = cp.parentType === "AgentInvocation";
+
+            let testId: string;
+            if (isDataset) testId = `dataset-node-${cp.id}`;
+            else if (isAgent) testId = `agent-node-${cp.id}`;
+            else testId = `workflow-node-${cp.id}`;
+
+            const href = isDataset
+              ? `/dataset-snapshot/${cp.id}`
+              : isAgent
+              ? `/agent-invocation/${cp.id}`
+              : `/workflow-run/${cp.id}`;
+
+            const nameColor = isDataset
+              ? "text-emerald-400/80"
+              : isAgent
+              ? "text-orange-400/80"
+              : "text-amber-400/80";
+
+            const badgeClass = isDataset
+              ? "text-emerald-700 bg-emerald-950/60 border border-emerald-800/40"
+              : isAgent
+              ? "text-orange-700 bg-orange-950/60 border border-orange-800/40"
+              : "text-amber-700 bg-amber-950/60 border border-amber-800/40";
+
+            const borderClass = isDataset
+              ? "border-emerald-800/60 hover:border-emerald-600/60"
+              : isAgent
+              ? "border-orange-800/60 hover:border-orange-600/60"
+              : "border-dashed border-amber-800/60 hover:border-amber-600/60";
+
+            const relationColor = isDataset
+              ? "text-emerald-800"
+              : isAgent
+              ? "text-orange-800"
+              : "text-amber-800";
+
+            const badge = isDataset ? "DATA" : isAgent ? "EVAL" : "RUN";
+
             return (
               <div
                 key={`cp-${cp.id}`}
                 data-node
-                data-testid={isDataset ? `dataset-node-${cp.id}` : `workflow-node-${cp.id}`}
+                data-testid={testId}
                 style={{
                   position: "absolute",
                   left: cp.x,
@@ -479,43 +518,26 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                 }}
                 className={[
                   "rounded-lg border bg-[#111111] px-3 py-2 flex flex-col justify-between select-none cursor-pointer transition-colors",
-                  isDataset
-                    ? "border-emerald-800/60 hover:border-emerald-600/60"
-                    : "border-dashed border-amber-800/60 hover:border-amber-600/60",
+                  borderClass,
                 ].join(" ")}
-                onClick={() =>
-                  router.push(
-                    isDataset
-                      ? `/dataset-snapshot/${cp.id}`
-                      : `/workflow-run/${cp.id}`
-                  )
-                }
+                onClick={() => router.push(href)}
                 role="button"
                 aria-label={`View ${cp.parentType}: ${cp.parentName}`}
               >
                 <div className="flex items-start justify-between gap-1">
-                  <span
-                    className={`text-[10px] font-medium leading-tight line-clamp-2 flex-1 min-w-0 ${
-                      isDataset ? "text-emerald-400/80" : "text-amber-400/80"
-                    }`}
-                  >
+                  <span className={`text-[10px] font-medium leading-tight line-clamp-2 flex-1 min-w-0 ${nameColor}`}>
                     {cp.parentName}
                   </span>
-                  <span
-                    className={`flex-shrink-0 text-[8px] font-medium rounded px-1 py-0.5 leading-none ml-1 mt-0.5 ${
-                      isDataset
-                        ? "text-emerald-700 bg-emerald-950/60 border border-emerald-800/40"
-                        : "text-amber-700 bg-amber-950/60 border border-amber-800/40"
-                    }`}
-                  >
-                    {isDataset ? "DATA" : "RUN"}
+                  <span className={`flex-shrink-0 text-[8px] font-medium rounded px-1 py-0.5 leading-none ml-1 mt-0.5 ${badgeClass}`}>
+                    {badge}
                   </span>
                 </div>
-                <span
-                  className={`text-[8px] font-medium mt-1 ${
-                    isDataset ? "text-emerald-800" : "text-amber-800"
-                  }`}
-                >
+                {cp.outputSummary && (
+                  <p className={`text-[8px] leading-snug truncate mt-0.5 ${relationColor}`}>
+                    {cp.outputSummary}
+                  </p>
+                )}
+                <span className={`text-[8px] font-medium mt-1 ${relationColor}`}>
                   {cp.relationType}
                 </span>
               </div>
