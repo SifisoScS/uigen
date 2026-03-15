@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle, XCircle, Clock, GitMerge, Wand2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle, XCircle, Clock, GitMerge, Wand2, Rocket } from "lucide-react";
 import { approveVariant } from "@/actions/approve-variant";
 import { mergeVariant } from "@/actions/merge-variant";
 import { applyVariantSuggestion } from "@/actions/apply-variant-suggestion";
+import { publishVariantAsArtifact } from "@/actions/publish-variant-as-artifact";
 import { ConflictResolution } from "@/components/variant/ConflictResolution";
 import type { ConflictingFile } from "@/lib/virtual-fs-utils";
 
@@ -61,11 +63,14 @@ export function VariantApprovalCard({
   initialIsMerged,
   initialIsMutated,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [isMerged, setIsMerged] = useState(initialIsMerged);
   const [isMutated, setIsMutated] = useState(initialIsMutated);
   const [isApplying, setIsApplying] = useState(false);
   const [mutateError, setMutateError] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictingFile[] | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -102,6 +107,21 @@ export function VariantApprovalCard({
   function handleResolved() {
     setIsMerged(true);
     setConflicts(null);
+  }
+
+  async function handlePublishVariant() {
+    setIsPublishing(true);
+    setPublishError(null);
+    try {
+      const { artifactId } = await publishVariantAsArtifact({
+        variantProjectId: variantId,
+        originalArtifactId,
+      });
+      router.push(`/share/${artifactId}`);
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : "Failed to publish");
+      setIsPublishing(false);
+    }
   }
 
   async function handleApplySuggestion() {
@@ -210,6 +230,23 @@ export function VariantApprovalCard({
           conflictingFiles={conflicts}
           onResolved={handleResolved}
         />
+      )}
+
+      {isMerged && (
+        <div className="flex items-center gap-2 pt-1 flex-wrap">
+          <button
+            disabled={isPublishing}
+            onClick={handlePublishVariant}
+            data-testid={`publish-variant-btn-${variantId}`}
+            className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-medium bg-indigo-950/40 border border-indigo-800/40 text-indigo-400 hover:bg-indigo-900/40 hover:border-indigo-700/50 transition-colors disabled:opacity-50"
+          >
+            <Rocket className="h-2.5 w-2.5" />
+            {isPublishing ? "Publishing…" : "Publish as next generation"}
+          </button>
+        </div>
+      )}
+      {publishError && (
+        <p className="text-[10px] text-red-400 mt-1">{publishError}</p>
       )}
     </div>
   );
