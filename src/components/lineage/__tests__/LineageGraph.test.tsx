@@ -53,6 +53,8 @@ function makeCrossParent(id: string, name = `Workflow ${id}`): CrossParentNode {
     outputSummary: null,
     relationType: "GENERATED_BY",
     createdAt: new Date("2026-01-01"),
+    externalArtifactUrl: null,
+    externalRepoId: null,
   };
 }
 
@@ -271,6 +273,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "INFORMED_BY",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [dsParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -287,6 +291,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "INFORMED_BY",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [dsParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -364,6 +370,8 @@ describe("LineageGraph", () => {
       outputSummary: "Add aria-label to interactive elements",
       relationType: "EVALUATED_BY",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [agentParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -380,6 +388,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "EVALUATED_BY",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [agentParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -397,6 +407,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "EVALUATED_BY",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [agentParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -490,6 +502,8 @@ describe("LineageGraph", () => {
       outputSummary: "Add aria-label to interactive elements",
       relationType: "CRITIQUE_MERGED_INTO",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [mergeParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -505,6 +519,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "CRITIQUE_MERGED_INTO",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [mergeParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -521,6 +537,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "CRITIQUE_MERGED_INTO",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const data = makeData("cur", { crossParents: [mergeParent] });
     render(<LineageGraph initialData={data} currentId="cur" />);
@@ -538,6 +556,8 @@ describe("LineageGraph", () => {
       outputSummary: null,
       relationType: "INFORMED_BY",
       createdAt: new Date("2026-01-01"),
+      externalArtifactUrl: null,
+      externalRepoId: null,
     };
     const wfParent = makeCrossParent("wf-badge", "My Workflow");
     const data = makeData("cur", { crossParents: [dsParent, wfParent] });
