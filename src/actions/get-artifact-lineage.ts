@@ -101,6 +101,14 @@ export interface CrossParentNode {
   createdAt: Date;
 }
 
+/** A variant Project stub auto-generated from a critique suggestion (NEW_VARIANT_OF). */
+export interface VariantNode {
+  id: string;
+  name: string;
+  suggestion: string | null;
+  createdAt: Date;
+}
+
 export interface ArtifactLineageDeep {
   /** The artifact being viewed. */
   current: ArtifactNode;
@@ -112,6 +120,8 @@ export interface ArtifactLineageDeep {
   depthReached: boolean;
   /** Cross-artifact parents (WorkflowRuns etc.) linked via ArtifactRelation. */
   crossParents: CrossParentNode[];
+  /** Variant Project stubs generated from critique suggestions (NEW_VARIANT_OF). */
+  variants: VariantNode[];
 }
 
 type RawDeep = {
@@ -283,11 +293,42 @@ export async function getArtifactLineageDeep(
     }
   }
 
+  // 5. Fetch variant Projects linked via NEW_VARIANT_OF relations
+  const variantRelations = await prisma.artifactRelation.findMany({
+    where: {
+      parentType: "PublicArtifact",
+      parentId: artifactId,
+      childType: "Project",
+      relationType: "NEW_VARIANT_OF",
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const variants: VariantNode[] = [];
+  for (const rel of variantRelations) {
+    const project = await prisma.project.findUnique({
+      where: { id: rel.childId },
+      select: { id: true, name: true, createdAt: true },
+    });
+    if (project) {
+      // Extract suggestion hint from project name (after " — ")
+      const dashIdx = project.name.indexOf(" — ");
+      const suggestion = dashIdx !== -1 ? project.name.slice(dashIdx + 3) : null;
+      variants.push({
+        id: project.id,
+        name: project.name,
+        suggestion,
+        createdAt: project.createdAt,
+      });
+    }
+  }
+
   return {
     current,
     parents,
     children: childrenRaw.map(toNode),
     depthReached,
     crossParents,
+    variants,
   };
 }

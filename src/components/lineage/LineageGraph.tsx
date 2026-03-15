@@ -8,6 +8,7 @@ import {
   type ArtifactLineageDeep,
   type ArtifactNode,
   type CrossParentNode,
+  type VariantNode,
 } from "@/actions/get-artifact-lineage";
 
 // ── Layout constants ──────────────────────────────────────────────────────────
@@ -30,6 +31,11 @@ interface WorkflowLayoutNode extends CrossParentNode {
   y: number;
 }
 
+interface VariantLayoutNode extends VariantNode {
+  x: number;
+  y: number;
+}
+
 interface Edge {
   fromX: number;
   fromY: number;
@@ -37,11 +43,13 @@ interface Edge {
   toY: number;
   key: string;
   dashed?: boolean;
+  variant?: boolean;
 }
 
 interface Layout {
   nodes: LayoutNode[];
   workflowNodes: WorkflowLayoutNode[];
+  variantNodes: VariantLayoutNode[];
   edges: Edge[];
   canvasW: number;
   canvasH: number;
@@ -62,13 +70,24 @@ export interface LineageGraphProps {
 
 function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
   const { parents, current, children, crossParents } = data;
+  const variants = data.variants ?? [];
 
   const childCount = children.length;
   const wfCount = crossParents.length;
+  const variantCount = variants.length;
   const childRowW = childCount > 0 ? childCount * NODE_W + (childCount - 1) * H_GAP : 0;
   const wfRowW    = wfCount    > 0 ? wfCount    * NODE_W + (wfCount    - 1) * H_GAP : 0;
-  const canvasW = Math.max(NODE_W + PADDING * 2, childRowW + PADDING * 2, wfRowW + PADDING * 2);
-  const centerX = canvasW / 2;
+
+  // Main column width (centered chain)
+  const mainColW = Math.max(NODE_W + PADDING * 2, childRowW + PADDING * 2, wfRowW + PADDING * 2);
+  const centerX = mainColW / 2;
+
+  // Variant column: to the right of the main chain
+  const variantGap = 48;
+  const variantStartX = centerX + NODE_W / 2 + variantGap;
+  const canvasW = variantCount > 0
+    ? variantStartX + NODE_W + PADDING
+    : mainColW;
 
   // WorkflowRun row sits at the very top, offset from PADDING
   const wfOffset = wfCount > 0 ? NODE_H + V_GAP : 0;
@@ -141,12 +160,37 @@ function computeLayout(data: ArtifactLineageDeep, currentId: string): Layout {
     });
   }
 
+  // Variant nodes: right column, stacked from currentY
+  const variantNodes: VariantLayoutNode[] = variants.map((v, i) => ({
+    ...v,
+    x: variantStartX,
+    y: currentY + i * (NODE_H + V_GAP / 2),
+  }));
+
+  // Edges: current → variants (dashed gray, horizontal-ish)
+  for (const v of variantNodes) {
+    edges.push({
+      fromX: currentNode.x + NODE_W,
+      fromY: currentNode.y + NODE_H / 2,
+      toX: v.x,
+      toY: v.y + NODE_H / 2,
+      key: `variant-${currentId}->${v.id}`,
+      dashed: true,
+      variant: true,
+    });
+  }
+
+  const variantCanvasH = variantCount > 0
+    ? variantNodes[variantCount - 1].y + NODE_H + PADDING
+    : 0;
+
   return {
     nodes: [...parentNodes, currentNode, ...childNodes],
     workflowNodes,
+    variantNodes,
     edges,
     canvasW,
-    canvasH,
+    canvasH: Math.max(canvasH, variantCanvasH),
   };
 }
 
@@ -453,11 +497,11 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                 x1={edge.fromX}
                 y1={edge.fromY}
                 x2={edge.toX}
-                y2={edge.toY - 5}
-                stroke={edge.dashed ? "#4a3a1a" : "#2a2a2a"}
+                y2={edge.variant ? edge.toY : edge.toY - 5}
+                stroke={edge.variant ? "#3a3a3a" : edge.dashed ? "#4a3a1a" : "#2a2a2a"}
                 strokeWidth={1.5}
-                strokeDasharray={edge.dashed ? "5 3" : undefined}
-                markerEnd="url(#lg-arrow)"
+                strokeDasharray={edge.dashed || edge.variant ? "5 3" : undefined}
+                markerEnd={edge.variant ? undefined : "url(#lg-arrow)"}
               />
             ))}
           </svg>
@@ -543,6 +587,38 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
               </div>
             );
           })}
+
+          {/* Variant node cards (NEW_VARIANT_OF) */}
+          {layout.variantNodes.map((v) => (
+            <div
+              key={`var-${v.id}`}
+              data-node
+              data-testid={`variant-node-${v.id}`}
+              style={{
+                position: "absolute",
+                left: v.x,
+                top: v.y,
+                width: NODE_W,
+                height: NODE_H,
+              }}
+              className="rounded-lg border border-dashed border-[#3a3a3a] bg-[#0d0d0d] px-3 py-2 flex flex-col justify-between select-none cursor-pointer transition-colors hover:border-[#4a4a4a]"
+              onClick={() => router.push(`/${v.id}`)}
+              role="button"
+              aria-label={`Open variant: ${v.name}`}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <span className="text-[10px] font-medium text-neutral-500 leading-tight line-clamp-2 flex-1 min-w-0">
+                  {v.suggestion ?? v.name}
+                </span>
+                <span className="flex-shrink-0 text-[8px] font-medium rounded px-1 py-0.5 leading-none ml-1 mt-0.5 text-neutral-600 bg-[#1a1a1a] border border-[#2a2a2a]">
+                  VAR
+                </span>
+              </div>
+              <span className="text-[8px] text-neutral-700 font-medium mt-1">
+                NEW_VARIANT_OF
+              </span>
+            </div>
+          ))}
 
           {/* Artifact node cards */}
           {layout.nodes.map((node) => {

@@ -1,9 +1,19 @@
 "use server";
 
+import { generateObject } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
+import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// ── Default stub critique ─────────────────────────────────────────────────────
+// ── Critique schema ────────────────────────────────────────────────────────────
+
+const critiqueSchema = z.object({
+  issues: z.array(z.string()).describe("Concrete accessibility or UX issues found in the component"),
+  suggestions: z.array(z.string()).describe("Actionable improvement suggestions"),
+});
+
+// ── Default stub critique (used when ANTHROPIC_API_KEY is absent) ──────────────
 
 const DEFAULT_CRITIQUE = {
   suggestions: [
@@ -17,12 +27,32 @@ const DEFAULT_CRITIQUE = {
   ],
 };
 
+// ── Prompt builder ────────────────────────────────────────────────────────────
+
+function buildCritiquePrompt(
+  artifactName: string,
+  semanticSummary: string | null,
+  componentTree: unknown,
+  styleSignature: unknown,
+): string {
+  const lines: string[] = [
+    `Critique this React UI component for accessibility, performance, and shadcn/Tailwind best practices.`,
+    ``,
+    `Component: ${artifactName}`,
+  ];
+  if (semanticSummary) lines.push(`Summary: ${semanticSummary}`);
+  if (componentTree) lines.push(`Component tree: ${JSON.stringify(componentTree).slice(0, 400)}`);
+  if (styleSignature) lines.push(`Style signature: ${JSON.stringify(styleSignature).slice(0, 400)}`);
+  lines.push(``, `Return 2–4 issues and 2–4 actionable suggestions.`);
+  return lines.join("\n");
+}
+
 // ── Action ────────────────────────────────────────────────────────────────────
 
 export async function critiqueArtifact({
   artifactId,
   agentName = "StubAgent",
-  prompt = "Critique this UI component for accessibility, performance, and shadcn best practices",
+  prompt,
 }: {
   artifactId: string;
   agentName?: string;
@@ -31,23 +61,57 @@ export async function critiqueArtifact({
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
 
-  // 1. Verify artifact exists
+  // 1. Verify artifact exists and fetch introspection data
   const artifact = await prisma.publicArtifact.findUnique({
     where: { id: artifactId },
-    select: { id: true, projectId: true, name: true },
+    select: {
+      id: true,
+      projectId: true,
+      name: true,
+      filesData: true,
+      semanticSummary: true,
+      componentTree: true,
+      styleSignature: true,
+    },
   });
   if (!artifact) throw new Error("Artifact not found");
 
-  // 2. Create AgentInvocation (stub critique — placeholder for real LLM call)
+  // 2. Build critique prompt from introspection data
+  const critiquePrompt =
+    prompt ??
+    buildCritiquePrompt(
+      artifact.name,
+      artifact.semanticSummary,
+      artifact.componentTree,
+      artifact.styleSignature,
+    );
+
+  // 3. Generate critique — real LLM when API key present, stub fallback otherwise
+  let critiqueJson: { issues: string[]; suggestions: string[] } = DEFAULT_CRITIQUE;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (apiKey && apiKey.trim() !== "") {
+    try {
+      const { object } = await generateObject({
+        model: anthropic("claude-sonnet-4-6"),
+        schema: critiqueSchema,
+        prompt: critiquePrompt,
+      });
+      critiqueJson = object;
+    } catch {
+      // LLM call failed — keep DEFAULT_CRITIQUE
+    }
+  }
+
+  // 4. Create AgentInvocation record
   const invocation = await prisma.agentInvocation.create({
     data: {
       agentName,
-      prompt,
-      critiqueJson: DEFAULT_CRITIQUE,
+      prompt: critiquePrompt,
+      critiqueJson,
     },
   });
 
-  // 3. Cross-artifact relation: AgentInvocation → PublicArtifact (EVALUATED_BY)
+  // 5. Cross-artifact relation: AgentInvocation → PublicArtifact (EVALUATED_BY)
   await prisma.artifactRelation.create({
     data: {
       parentType: "AgentInvocation",
@@ -58,7 +122,7 @@ export async function critiqueArtifact({
     },
   });
 
-  // 4. Governance event
+  // 6. Governance event for the critique
   await prisma.governanceEvent.create({
     data: {
       projectId: artifact.projectId,
@@ -74,5 +138,41 @@ export async function critiqueArtifact({
     },
   });
 
-  return { invocationId: invocation.id };
+  // 7. Auto-variant generation: one Project stub per suggestion
+  const variantIds: string[] = [];
+  for (const suggestion of critiqueJson.suggestions) {
+    const variant = await prisma.project.create({
+      data: {
+        name: `${artifact.name} — ${suggestion.slice(0, 50)}`,
+        data: artifact.filesData,
+      },
+    });
+
+    await prisma.artifactRelation.create({
+      data: {
+        parentType: "PublicArtifact",
+        parentId: artifactId,
+        childType: "Project",
+        childId: variant.id,
+        relationType: "NEW_VARIANT_OF",
+      },
+    });
+
+    await prisma.governanceEvent.create({
+      data: {
+        projectId: artifact.projectId,
+        type: "ARTIFACT_VARIANT_CREATED",
+        actor: agentName.toLowerCase(),
+        details: {
+          parentId: artifactId,
+          childId: variant.id,
+          suggestion,
+        },
+      },
+    });
+
+    variantIds.push(variant.id);
+  }
+
+  return { invocationId: invocation.id, variantIds };
 }
