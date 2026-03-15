@@ -140,6 +140,9 @@ model PublicArtifact {
   remixCount        Int      @default(0)
   lastRemixedAt     DateTime?
   parentArtifactId  String?  // PublicArtifact.id this was remixed from
+  semanticSummary   String?  // e.g. "Responsive pricing card with monthly/annual toggle"
+  componentTree     Json?    // stub AST-like: { type: "component", name: "...", children: [] }
+  styleSignature    Json?    // stub: { colors: ["text-neutral-100"], spacing: ["gap-4", "p-6"] }
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

@@ -22,7 +22,7 @@ import type { ArtifactLineageDeep, ArtifactNode, CrossParentNode } from "@/actio
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeNode(id: string, name = `Artifact ${id}`): ArtifactNode {
+function makeNode(id: string, name = `Artifact ${id}`, semanticSummary: string | null = null): ArtifactNode {
   return {
     id,
     name,
@@ -33,6 +33,7 @@ function makeNode(id: string, name = `Artifact ${id}`): ArtifactNode {
     remixCount: 0,
     policyType: "HUMAN_ONLY",
     parentArtifactId: null,
+    semanticSummary,
   };
 }
 
@@ -264,6 +265,29 @@ describe("LineageGraph", () => {
     await user.click(screen.getByTestId("dataset-node-ds-77"));
 
     expect(mockPush).toHaveBeenCalledWith("/dataset-snapshot/ds-77");
+  });
+
+  it("shows semanticSummary excerpt as subtitle on artifact nodes", () => {
+    const node = makeNode("sum-1", "AuthForm", "Responsive auth form with dark mode support");
+    const data = makeData("sum-1", { children: [node] });
+    // Use sum-1 as a child so it renders a node (current is also sum-1 but makeData wraps it separately)
+    const parentData = makeData("root-x", { children: [node] });
+    render(<LineageGraph initialData={parentData} currentId="root-x" />);
+
+    const childNode = screen.getByTestId("node-sum-1");
+    expect(childNode.textContent).toContain("Responsive auth form with dark mode support");
+  });
+
+  it("does not render summary subtitle when semanticSummary is null", () => {
+    const node = makeNode("no-sum", "NoSummary", null);
+    const data = makeData("root-ns", { children: [node] });
+    render(<LineageGraph initialData={data} currentId="root-ns" />);
+
+    const childNode = screen.getByTestId("node-no-sum");
+    // Should only contain the name, no extra summary text
+    expect(childNode.textContent).toContain("NoSummary");
+    expect(childNode.textContent).not.toContain("undefined");
+    expect(childNode.textContent).not.toContain("null");
   });
 
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {

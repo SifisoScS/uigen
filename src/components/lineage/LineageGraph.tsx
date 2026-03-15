@@ -13,7 +13,7 @@ import {
 // ── Layout constants ──────────────────────────────────────────────────────────
 
 const NODE_W = 180;
-const NODE_H = 76;
+const NODE_H = 92;
 const V_GAP = 80;
 const H_GAP = 24;
 const PADDING = 40;
@@ -547,8 +547,15 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                   </span>
                 </div>
 
+                {/* Semantic summary excerpt */}
+                {node.semanticSummary && (
+                  <p className="text-[9px] text-neutral-500 leading-tight truncate mt-0.5">
+                    {node.semanticSummary.slice(0, 60)}
+                  </p>
+                )}
+
                 {/* Policy badge + remix count + current label */}
-                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                <div className="flex items-center gap-1 mt-1 flex-wrap">
                   {node.policyType && (
                     <span
                       style={{
