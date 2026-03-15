@@ -87,6 +87,8 @@ export interface ArtifactNode {
   semanticSummary: string | null;
   /** First extracted color class (e.g. "bg-violet-500") for graph node swatches. */
   firstColor: string | null;
+  /** Registry components used in this artifact (e.g. ["Button", "Card"]). */
+  usedComponents: string[];
 }
 
 /** A non-UI parent linked via ArtifactRelation (e.g. the WorkflowRun that generated this artifact). */
@@ -140,6 +142,13 @@ function extractFirstColor(sig: unknown): string | null {
   return typeof colors[0] === "string" ? colors[0] : null;
 }
 
+function extractUsedComponents(sig: unknown): string[] {
+  if (!sig || typeof sig !== "object") return [];
+  const comps = (sig as Record<string, unknown>).usedComponents;
+  if (!Array.isArray(comps)) return [];
+  return comps.filter((c): c is string => typeof c === "string");
+}
+
 function toNode(raw: RawDeep): ArtifactNode {
   return {
     id: raw.id,
@@ -153,6 +162,7 @@ function toNode(raw: RawDeep): ArtifactNode {
     parentArtifactId: raw.parentArtifactId,
     semanticSummary: raw.semanticSummary,
     firstColor: extractFirstColor(raw.styleSignature),
+    usedComponents: extractUsedComponents(raw.styleSignature),
   };
 }
 

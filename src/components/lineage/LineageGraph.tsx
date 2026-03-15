@@ -13,7 +13,7 @@ import {
 // ── Layout constants ──────────────────────────────────────────────────────────
 
 const NODE_W = 180;
-const NODE_H = 92;
+const NODE_H = 104;
 const V_GAP = 80;
 const H_GAP = 24;
 const PADDING = 40;
@@ -567,6 +567,17 @@ export function LineageGraph({ initialData, currentId }: LineageGraphProps) {
                 {node.semanticSummary && (
                   <p className="text-[9px] text-neutral-500 leading-tight truncate mt-0.5">
                     {node.semanticSummary.slice(0, 60)}
+                  </p>
+                )}
+
+                {/* Used registry components excerpt */}
+                {node.usedComponents.length > 0 && (
+                  <p
+                    data-testid={`used-components-${node.id}`}
+                    className="text-[9px] text-violet-600/70 leading-tight truncate mt-0.5"
+                  >
+                    Used: {node.usedComponents.slice(0, 3).join(", ")}
+                    {node.usedComponents.length > 3 ? ` +${node.usedComponents.length - 3}` : ""}
                   </p>
                 )}
 

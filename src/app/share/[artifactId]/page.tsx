@@ -156,6 +156,9 @@ export default async function SharePage({
             artifact.styleSignature as {
               colors?: string[];
               spacing?: string[];
+              classes?: string[];
+              usedComponents?: string[];
+              propSummary?: Record<string, string[]>;
             } | null
           }
         />
