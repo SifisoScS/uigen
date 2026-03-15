@@ -2,13 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Sparkles, Loader2, CheckSquare, GitMerge } from "lucide-react";
+import { Bot, Sparkles, Loader2, CheckSquare, GitMerge, Zap } from "lucide-react";
 import { critiqueArtifact, type AggregatedCritique } from "@/actions/critique-artifact";
 import { generateSelectedVariants } from "@/actions/generate-selected-variants";
 import { coordinateCritiques, type MergedCritique, type WeightedSuggestion } from "@/actions/coordinate-critiques";
+import {
+  scoreCritiqueSuggestions,
+  type ScoredSuggestion,
+  AUTO_SELECT_THRESHOLD,
+} from "@/actions/score-critique-suggestions";
 
-interface FlatSuggestion {
-  text: string;
+interface FlatSuggestion extends ScoredSuggestion {
   agentName: string;
   priority: number;
   finalScore: number;
@@ -28,22 +32,30 @@ function priorityBadgeClass(priority: number): string {
   return "text-green-400 bg-green-950/40 border-green-800/40";
 }
 
+function impactBadgeClass(score: number): string {
+  if (score >= 0.75) return "text-emerald-400 bg-emerald-950/40 border-emerald-800/40";
+  if (score >= AUTO_SELECT_THRESHOLD) return "text-teal-400 bg-teal-950/40 border-teal-800/40";
+  return "text-neutral-500 bg-[#1a1a1a] border-[#2a2a2a]";
+}
+
 export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) {
   const router = useRouter();
   const [critiques, setCritiques] = useState<AggregatedCritique[] | null>(null);
+  const [scoredSuggestions, setScoredSuggestions] = useState<FlatSuggestion[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [critiqueError, setCritiqueError] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [coordinateError, setCoordinateError] = useState<string | null>(null);
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
   const [merged, setMerged] = useState<MergedCritique | null>(null);
   const [isCritiquing, startCritique] = useTransition();
   const [isGenerating, startGenerate] = useTransition();
   const [isCoordinating, startCoordinate] = useTransition();
+  const [isScoring, startScore] = useTransition();
 
-  // Flatten all agent suggestions into a stable indexed list
-  // critiques arrive pre-sorted by finalScore descending from the server action
-  const flatSuggestions: FlatSuggestion[] = critiques
+  // Fall back to a flat list derived from raw critiques when scoring hasn't run yet
+  const flatSuggestions: FlatSuggestion[] = scoredSuggestions ?? (critiques
     ? critiques.flatMap((c, agentIdx) =>
         c.suggestions.map((text, suggIdx) => ({
           text,
@@ -51,9 +63,14 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
           priority: c.priority,
           finalScore: c.finalScore,
           index: agentIdx * 1000 + suggIdx,
+          score: c.finalScore,
+          contributors: [c.agentName],
+          relevanceScore: 0,
+          safetyScore: 0,
+          expectedImpactScore: c.finalScore,
         }))
       )
-    : [];
+    : []);
 
   function handleRequestCritique() {
     setCritiqueError(null);
@@ -83,13 +100,51 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
     });
   }
 
+  function handleAutoSelect() {
+    const highImpact = new Set(
+      flatSuggestions
+        .filter((s) => s.expectedImpactScore >= AUTO_SELECT_THRESHOLD)
+        .map((s) => s.index)
+    );
+    setSelected(highImpact);
+  }
+
   function handleCoordinateCritiques() {
     if (!critiques) return;
     setCoordinateError(null);
+    setScoreError(null);
     startCoordinate(async () => {
       try {
-        const result = await coordinateCritiques({ artifactId, agentCritiques: critiques });
-        setMerged(result.mergedCritique);
+        const coordResult = await coordinateCritiques({ artifactId, agentCritiques: critiques });
+        setMerged(coordResult.mergedCritique);
+
+        // Score the merged suggestions immediately
+        startScore(async () => {
+          try {
+            const scoreResult = await scoreCritiqueSuggestions({
+              artifactId,
+              suggestions: coordResult.mergedCritique.weightedSuggestions,
+            });
+
+            // Map scored suggestions back onto the flat list with stable indices
+            const flat: FlatSuggestion[] = scoreResult.scoredSuggestions.map((ss, i) => {
+              // Find original agentIdx/suggIdx to preserve index keying
+              const found = flatSuggestions.find(
+                (f) => f.text.trim().toLowerCase() === ss.text.trim().toLowerCase()
+              );
+              return {
+                ...ss,
+                agentName: found?.agentName ?? ss.contributors[0] ?? "Claude",
+                priority: found?.priority ?? 2,
+                finalScore: found?.finalScore ?? ss.score,
+                index: found?.index ?? i,
+              };
+            });
+            setScoredSuggestions(flat);
+          } catch (err) {
+            setScoreError(err instanceof Error ? err.message : "Scoring failed");
+          }
+        });
       } catch (err) {
         setCoordinateError(err instanceof Error ? err.message : "Coordination failed");
       }
@@ -135,6 +190,10 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
     });
   }
 
+  const autoSelectCount = flatSuggestions.filter(
+    (s) => s.expectedImpactScore >= AUTO_SELECT_THRESHOLD
+  ).length;
+
   return (
     <section
       data-testid="multi-agent-critique-panel"
@@ -176,9 +235,23 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
       {/* Suggestion selection list */}
       {critiques && flatSuggestions.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider">
-            Select suggestions to generate as variants
-          </p>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wider">
+              Select suggestions to generate as variants
+            </p>
+
+            {/* Auto-select button — visible once scoring has run */}
+            {scoredSuggestions && autoSelectCount > 0 && !generated && (
+              <button
+                onClick={handleAutoSelect}
+                data-testid="auto-select-btn"
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium bg-teal-950/40 border border-teal-700/40 text-teal-300 hover:bg-teal-900/40 hover:border-teal-600/50 transition-colors"
+              >
+                <Zap className="h-2.5 w-2.5" />
+                Auto-select {autoSelectCount} high-impact
+              </button>
+            )}
+          </div>
 
           {flatSuggestions.map((s) => (
             <label
@@ -223,6 +296,18 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
                 >
                   {s.finalScore.toFixed(2)}
                 </span>
+                {/* Impact score pill — only rendered after scoring */}
+                {scoredSuggestions && (
+                  <span
+                    data-testid={`impact-pill-${s.index}`}
+                    className={`text-[9px] font-mono px-1 py-0.5 rounded border ${impactBadgeClass(
+                      s.expectedImpactScore
+                    )}`}
+                    title={`Relevance: ${s.relevanceScore.toFixed(2)} · Safety: ${s.safetyScore.toFixed(2)}`}
+                  >
+                    ⚡{s.expectedImpactScore.toFixed(2)}
+                  </span>
+                )}
               </div>
             </label>
           ))}
@@ -232,19 +317,26 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
             <div className="pt-1">
               <button
                 onClick={handleCoordinateCritiques}
-                disabled={isCoordinating}
+                disabled={isCoordinating || isScoring}
                 data-testid="coordinate-critiques-btn"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-950/40 border border-indigo-700/40 text-indigo-300 hover:bg-indigo-900/40 hover:border-indigo-600/50 transition-colors disabled:opacity-50"
               >
-                {isCoordinating ? (
+                {isCoordinating || isScoring ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <GitMerge className="h-3 w-3" />
                 )}
-                {isCoordinating ? "Coordinating…" : "Coordinate critiques"}
+                {isCoordinating
+                  ? "Coordinating…"
+                  : isScoring
+                  ? "Scoring…"
+                  : "Coordinate critiques"}
               </button>
               {coordinateError && (
                 <p className="text-[11px] text-red-400 mt-1">{coordinateError}</p>
+              )}
+              {scoreError && (
+                <p className="text-[11px] text-amber-400 mt-1">{scoreError}</p>
               )}
             </div>
           )}
