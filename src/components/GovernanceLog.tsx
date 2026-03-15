@@ -49,6 +49,7 @@ function eventLabel(type: string): string {
     case "WORKFLOW_STEP_COMPLETED":           return "Step completed";
     case "WORKFLOW_STEP_FAILED":              return "Step failed";
     case "WORKFLOW_RUN_COMPLETED":            return "Workflow completed";
+    case "DESCENDANT_METRICS_AGGREGATED":    return "Descendants aggregated";
     default:                                 return type;
   }
 }
@@ -79,6 +80,7 @@ function eventAccent(type: string): string {
     case "WORKFLOW_STEP_COMPLETED":           return "text-emerald-400";
     case "WORKFLOW_STEP_FAILED":              return "text-red-400";
     case "WORKFLOW_RUN_COMPLETED":            return "text-purple-400";
+    case "DESCENDANT_METRICS_AGGREGATED":    return "text-teal-300";
     default:                                 return "text-neutral-400";
   }
 }

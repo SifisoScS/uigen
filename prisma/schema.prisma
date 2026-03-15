@@ -209,9 +209,11 @@ model PublicArtifact {
   parentArtifactId String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
-  componentTree    Json?
-  semanticSummary  String?
-  styleSignature   Json?
+  componentTree       Json?
+  semanticSummary     String?
+  styleSignature      Json?
+  descendantCount     Int       @default(0)
+  descendantMetrics   Json?
 
   @@index([projectId])
   @@index([createdAt])
