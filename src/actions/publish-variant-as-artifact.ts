@@ -9,6 +9,7 @@ import {
   parseComponentTree,
   extractStyleSignature,
 } from "@/lib/artifact-introspection";
+import { computeSemanticDelta } from "@/lib/semantic-delta";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ export async function publishVariantAsArtifact({
       projectId: true,
       description: true,
       manifest: true,
+      filesData: true,
     },
   });
   if (!originalArtifact) throw new Error("Artifact not found");
@@ -206,6 +208,36 @@ export async function publishVariantAsArtifact({
       semanticSummary,
       componentTree,
       styleSignature,
+    },
+  });
+
+  // 12b. Compute semantic delta and record transform trace
+  const delta = computeSemanticDelta(originalArtifact.filesData, filesData);
+  await prisma.semanticTransform.create({
+    data: {
+      fromArtifactId: originalArtifactId,
+      toArtifactId: newArtifact.id,
+      addedComponents: delta.addedComponents,
+      removedComponents: delta.removedComponents,
+      modifiedProps: delta.modifiedProps,
+      a11yDelta: delta.a11yDelta,
+      linesChanged: delta.linesChanged,
+    },
+  });
+
+  await prisma.governanceEvent.create({
+    data: {
+      projectId: originalArtifact.projectId,
+      type: "SEMANTIC_TRANSFORM_RECORDED",
+      actor: session.userId,
+      details: {
+        fromArtifactId: originalArtifactId,
+        toArtifactId: newArtifact.id,
+        addedComponents: delta.addedComponents,
+        removedComponents: delta.removedComponents,
+        a11yDelta: delta.a11yDelta,
+        linesChanged: delta.linesChanged,
+      },
     },
   });
 
