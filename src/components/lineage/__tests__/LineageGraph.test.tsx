@@ -22,7 +22,12 @@ import type { ArtifactLineageDeep, ArtifactNode, CrossParentNode } from "@/actio
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeNode(id: string, name = `Artifact ${id}`, semanticSummary: string | null = null): ArtifactNode {
+function makeNode(
+  id: string,
+  name = `Artifact ${id}`,
+  semanticSummary: string | null = null,
+  firstColor: string | null = null
+): ArtifactNode {
   return {
     id,
     name,
@@ -34,6 +39,7 @@ function makeNode(id: string, name = `Artifact ${id}`, semanticSummary: string |
     policyType: "HUMAN_ONLY",
     parentArtifactId: null,
     semanticSummary,
+    firstColor,
   };
 }
 
@@ -288,6 +294,23 @@ describe("LineageGraph", () => {
     expect(childNode.textContent).toContain("NoSummary");
     expect(childNode.textContent).not.toContain("undefined");
     expect(childNode.textContent).not.toContain("null");
+  });
+
+  it("renders color swatch dot when node has firstColor with a known Tailwind color", () => {
+    const nodeWithColor = makeNode("swatch-1", "ColoredArtifact", null, "bg-violet-500");
+    const data = makeData("root-sw", { children: [nodeWithColor] });
+    render(<LineageGraph initialData={data} currentId="root-sw" />);
+
+    expect(screen.getByTestId("color-swatch-swatch-1")).toBeDefined();
+  });
+
+  it("does NOT render color swatch when firstColor is null", () => {
+    const nodeNoColor = makeNode("no-color-1", "NoColorArtifact", null, null);
+    const data = makeData("root-nc", { children: [nodeNoColor] });
+    render(<LineageGraph initialData={data} currentId="root-nc" />);
+
+    const canvas = screen.getByTestId("graph-canvas");
+    expect(canvas.querySelector("[data-testid='color-swatch-no-color-1']")).toBeNull();
   });
 
   it("DatasetSnapshot node shows DATA badge, WorkflowRun node shows RUN badge", () => {

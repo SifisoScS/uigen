@@ -406,23 +406,35 @@ describe("publishArtifact — introspection", () => {
     expect(data.semanticSummary).toBe("Accessible button with hover and focus states");
   });
 
-  it("includes componentTree stub in the created artifact", async () => {
+  it("componentTree is extracted from App.tsx (_source present, no _stub)", async () => {
     await publishArtifact({
       projectId: "proj-1",
       branchName: "release/v1.0",
       name: "PricingCard",
     });
 
-    expect(prisma.publicArtifact.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          componentTree: expect.objectContaining({ type: "component", name: "PricingCard" }),
-        }),
-      })
-    );
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { componentTree } = createCall.data as { componentTree: Record<string, unknown> };
+    // Real extraction: has _source (main file path), no _stub
+    expect(componentTree).toHaveProperty("_source", "/App.tsx");
+    expect(componentTree).not.toHaveProperty("_stub");
+    expect(componentTree).toHaveProperty("type");
   });
 
-  it("includes styleSignature with colors and spacing arrays", async () => {
+  it("componentTree root type is the root JSX element from App.tsx", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "MyWidget",
+    });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { componentTree } = createCall.data as unknown as { componentTree: { type: string } };
+    // PROJECT.data has App.tsx with `return <div>Hello</div>` → root = "div"
+    expect(componentTree.type).toBe("div");
+  });
+
+  it("includes styleSignature with colors, spacing, and classes arrays", async () => {
     await publishArtifact({
       projectId: "proj-1",
       branchName: "release/v1.0",
@@ -433,6 +445,7 @@ describe("publishArtifact — introspection", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           styleSignature: expect.objectContaining({
+            classes: expect.any(Array),
             colors: expect.any(Array),
             spacing: expect.any(Array),
           }),
@@ -441,7 +454,7 @@ describe("publishArtifact — introspection", () => {
     );
   });
 
-  it("logs ARTIFACT_INTROSPECTION_GENERATED governance event", async () => {
+  it("logs ARTIFACT_INTROSPECTION_GENERATED with classCount in details", async () => {
     await publishArtifact({
       projectId: "proj-1",
       branchName: "release/v1.0",
@@ -455,9 +468,94 @@ describe("publishArtifact — introspection", () => {
           details: expect.objectContaining({
             artifactId: "art-1",
             summaryExcerpt: expect.any(String),
+            classCount: expect.any(Number),
           }),
         }),
       })
     );
+  });
+
+  it("componentTree falls back to stub when no JSX file exists in filesData", async () => {
+    // Override project data with no file nodes
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: JSON.stringify({ type: "directory", name: "/", path: "/", children: {} }),
+    } as never);
+
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "EmptyProject",
+    });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { componentTree } = createCall.data as { componentTree: Record<string, unknown> };
+    expect(componentTree).toHaveProperty("_stub", true);
+    expect(componentTree).toHaveProperty("name", "EmptyProject");
+  });
+
+  it("semanticSummary detects reactive features from filesData", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: JSON.stringify({
+        type: "directory", name: "/", path: "/",
+        children: {
+          "App.tsx": {
+            type: "file", name: "App.tsx", path: "/App.tsx",
+            content: `import React, { useState } from 'react';
+export default function App() {
+  const [open, setOpen] = useState(false);
+  return <div className="sm:flex dark:bg-neutral-900 gap-4">Hello</div>;
+}`,
+          },
+        },
+      }),
+    } as never);
+
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "AuthForm",
+    });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { semanticSummary } = createCall.data as { semanticSummary: string };
+    // Should mention responsive + dark mode + interactive
+    expect(semanticSummary).toContain("responsive");
+    expect(semanticSummary).toContain("dark mode");
+    expect(semanticSummary).toContain("interactive");
+  });
+
+  it("extractStyleSignature extracts colors from className strings only", async () => {
+    vi.mocked(prisma.project.findUnique).mockResolvedValueOnce({
+      ...PROJECT,
+      data: JSON.stringify({
+        type: "directory", name: "/", path: "/",
+        children: {
+          "App.tsx": {
+            type: "file", name: "App.tsx", path: "/App.tsx",
+            content: `export default function App() {
+  return <div className="bg-violet-500 text-neutral-100 gap-4 flex items-center">Hi</div>;
+}`,
+          },
+        },
+      }),
+    } as never);
+
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "ColorTest",
+    });
+
+    const createCall = vi.mocked(prisma.publicArtifact.create).mock.calls[0][0];
+    const { styleSignature } = createCall.data as unknown as {
+      styleSignature: { colors: string[]; spacing: string[]; classes: string[] };
+    };
+    expect(styleSignature.colors).toContain("bg-violet-500");
+    expect(styleSignature.colors).toContain("text-neutral-100");
+    expect(styleSignature.spacing).toContain("gap-4");
+    expect(styleSignature.classes).toContain("flex");
+    expect(styleSignature.classes).toContain("items-center");
   });
 });

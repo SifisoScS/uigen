@@ -70,6 +70,7 @@ const DEEP_SELECT = {
   parentArtifactId: true,
   manifest: true,
   semanticSummary: true,
+  styleSignature: true,
 } as const;
 
 /** Full node shape used by the lineage graph viewer. */
@@ -84,6 +85,8 @@ export interface ArtifactNode {
   policyType: string | null;
   parentArtifactId: string | null;
   semanticSummary: string | null;
+  /** First extracted color class (e.g. "bg-violet-500") for graph node swatches. */
+  firstColor: string | null;
 }
 
 /** A non-UI parent linked via ArtifactRelation (e.g. the WorkflowRun that generated this artifact). */
@@ -120,6 +123,7 @@ type RawDeep = {
   parentArtifactId: string | null;
   manifest: unknown;
   semanticSummary: string | null;
+  styleSignature: unknown;
 };
 
 function extractPolicyType(manifest: unknown): string | null {
@@ -127,6 +131,13 @@ function extractPolicyType(manifest: unknown): string | null {
   const gov = (manifest as Record<string, unknown>).governancePolicy;
   if (!gov || typeof gov !== "object") return null;
   return ((gov as Record<string, unknown>).policyType as string) ?? null;
+}
+
+function extractFirstColor(sig: unknown): string | null {
+  if (!sig || typeof sig !== "object") return null;
+  const colors = (sig as Record<string, unknown>).colors;
+  if (!Array.isArray(colors) || colors.length === 0) return null;
+  return typeof colors[0] === "string" ? colors[0] : null;
 }
 
 function toNode(raw: RawDeep): ArtifactNode {
@@ -141,6 +152,7 @@ function toNode(raw: RawDeep): ArtifactNode {
     policyType: extractPolicyType(raw.manifest),
     parentArtifactId: raw.parentArtifactId,
     semanticSummary: raw.semanticSummary,
+    firstColor: extractFirstColor(raw.styleSignature),
   };
 }
 
