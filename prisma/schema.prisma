@@ -168,17 +168,30 @@ model WorkflowDefinition {
 }
 
 model ArtifactRelation {
-  id           String   @id @default(cuid())
-  parentType   String
-  parentId     String
-  childType    String
-  childId      String
-  relationType String
-  createdAt    DateTime @default(now())
+  id                  String   @id @default(cuid())
+  parentType          String
+  parentId            String
+  childType           String
+  childId             String
+  relationType        String
+  externalRepoId      String?
+  externalArtifactUrl String?
+  createdAt           DateTime @default(now())
 
   @@unique([parentType, parentId, childType, childId])
   @@index([childType, childId])
   @@index([parentType, parentId])
+  @@index([externalRepoId])
+}
+
+model ExternalRepo {
+  id         String    @id @default(cuid())
+  name       String
+  url        String    @unique
+  apiKey     String?
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model AgentReputation {
@@ -212,6 +225,17 @@ model AgentRole {
   updatedAt DateTime @updatedAt
 
   @@index([role])
+}
+
+model ArtifactEmbedding {
+  id           String   @id @default(cuid())
+  artifactId   String   @unique
+  vector       Float[]
+  modelVersion String   @default("stub-v1")
+  generatedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([artifactId])
 }
 
 model EvaluationRun {

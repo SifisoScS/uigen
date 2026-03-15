@@ -95,11 +95,15 @@ export interface ArtifactNode {
 /** A non-UI parent linked via ArtifactRelation (e.g. the WorkflowRun that generated this artifact). */
 export interface CrossParentNode {
   id: string;
-  parentType: string;    // "WorkflowRun" | future types
+  parentType: string;    // "WorkflowRun" | "ExternalArtifact" | future types
   parentName: string;
   outputSummary: string | null;
-  relationType: string;  // "GENERATED_BY" | future types
+  relationType: string;  // "GENERATED_BY" | "FORKED_FROM_EXTERNAL" | future types
   createdAt: Date;
+  /** Set for ExternalArtifact nodes — the absolute URL to the remote artifact. */
+  externalArtifactUrl: string | null;
+  /** Set for ExternalArtifact nodes — the registered repo id. */
+  externalRepoId: string | null;
 }
 
 /** A variant Project stub auto-generated from a critique suggestion (NEW_VARIANT_OF). */
@@ -261,6 +265,8 @@ export async function getArtifactLineageDeep(
           outputSummary: wr.outputSummary,
           relationType: rel.relationType,
           createdAt: wr.createdAt,
+          externalArtifactUrl: null,
+          externalRepoId: null,
         });
       }
     } else if (rel.parentType === "DatasetSnapshot") {
@@ -276,6 +282,8 @@ export async function getArtifactLineageDeep(
           outputSummary: null,
           relationType: rel.relationType,
           createdAt: ds.createdAt,
+          externalArtifactUrl: null,
+          externalRepoId: null,
         });
       }
     } else if (rel.parentType === "AgentInvocation") {
@@ -298,8 +306,30 @@ export async function getArtifactLineageDeep(
           outputSummary,
           relationType: rel.relationType,
           createdAt: inv.createdAt,
+          externalArtifactUrl: null,
+          externalRepoId: null,
         });
       }
+    } else if (rel.parentType === "ExternalArtifact") {
+      // Cross-repo link — no DB record to look up, reconstruct from the relation itself
+      const repoName = rel.externalRepoId
+        ? (
+            await prisma.externalRepo.findUnique({
+              where: { id: rel.externalRepoId },
+              select: { name: true },
+            })
+          )?.name ?? rel.externalRepoId
+        : "External";
+      crossParents.push({
+        id: rel.parentId,   // the externalArtifactUrl used as parentId
+        parentType: "ExternalArtifact",
+        parentName: repoName,
+        outputSummary: rel.externalArtifactUrl,
+        relationType: rel.relationType,
+        createdAt: rel.createdAt,
+        externalArtifactUrl: rel.externalArtifactUrl,
+        externalRepoId: rel.externalRepoId,
+      });
     }
   }
 

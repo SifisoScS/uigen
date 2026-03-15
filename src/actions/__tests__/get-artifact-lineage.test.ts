@@ -25,6 +25,9 @@ vi.mock("@/lib/prisma", () => ({
     project: {
       findUnique: vi.fn(),
     },
+    externalRepo: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -77,6 +80,7 @@ beforeEach(() => {
   vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([] as never);
   vi.mocked(prisma.project.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.agentInvocation.findUnique).mockResolvedValue(null);
+  vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue(null);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -433,5 +437,36 @@ describe("getArtifactLineageDeep", () => {
     const result = await getArtifactLineageDeep("art-missing-ds");
 
     expect(result.crossParents).toEqual([]);
+  });
+
+  it("populates crossParents from ExternalArtifact ArtifactRelation rows", async () => {
+    const raw = makeDeepRaw("art-ext");
+    vi.mocked(prisma.publicArtifact.findUnique).mockResolvedValue(raw as never);
+    vi.mocked(prisma.publicArtifact.findMany).mockResolvedValue([] as never);
+    const extUrl = "https://remote.example.com/api/registry/remote-art-1";
+    vi.mocked(prisma.artifactRelation.findMany).mockResolvedValue([
+      {
+        id: "rel-ext-1",
+        parentType: "ExternalArtifact",
+        parentId: extUrl,
+        childType: "PublicArtifact",
+        childId: "art-ext",
+        relationType: "FORKED_FROM_EXTERNAL",
+        externalRepoId: "repo-1",
+        externalArtifactUrl: extUrl,
+        createdAt: new Date("2026-01-01"),
+      },
+    ] as never);
+    vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue({ name: "Remote UIGen" } as never);
+
+    const result = await getArtifactLineageDeep("art-ext");
+
+    expect(result.crossParents).toHaveLength(1);
+    const cp = result.crossParents[0];
+    expect(cp.parentType).toBe("ExternalArtifact");
+    expect(cp.parentName).toBe("Remote UIGen");
+    expect(cp.externalArtifactUrl).toBe(extUrl);
+    expect(cp.externalRepoId).toBe("repo-1");
+    expect(cp.relationType).toBe("FORKED_FROM_EXTERNAL");
   });
 });

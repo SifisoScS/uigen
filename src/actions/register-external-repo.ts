@@ -1,0 +1,75 @@
+"use server";
+
+import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export interface RegisterExternalRepoInput {
+  name: string;
+  url: string;
+  apiKey?: string;
+}
+
+export interface RegisterExternalRepoResult {
+  id: string;
+  name: string;
+  url: string;
+  createdAt: Date;
+  alreadyExisted: boolean;
+}
+
+/**
+ * Register (or return) an external UIGen registry instance.
+ * Idempotent: if a repo with the same URL exists, it is returned unchanged.
+ */
+export async function registerExternalRepo(
+  input: RegisterExternalRepoInput
+): Promise<RegisterExternalRepoResult> {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+
+  const { name, url, apiKey } = input;
+  if (!url.startsWith("http")) throw new Error("url must be an absolute HTTP/HTTPS URL");
+
+  // Check for existing
+  const existing = await prisma.externalRepo.findUnique({ where: { url } });
+  if (existing) {
+    return {
+      id: existing.id,
+      name: existing.name,
+      url: existing.url,
+      createdAt: existing.createdAt,
+      alreadyExisted: true,
+    };
+  }
+
+  const repo = await prisma.externalRepo.create({
+    data: { name, url, apiKey: apiKey ?? null },
+  });
+
+  return {
+    id: repo.id,
+    name: repo.name,
+    url: repo.url,
+    createdAt: repo.createdAt,
+    alreadyExisted: false,
+  };
+}
+
+export interface ListExternalReposResult {
+  id: string;
+  name: string;
+  url: string;
+  lastSyncAt: Date | null;
+  createdAt: Date;
+}
+
+/** Return all registered external repos (no sensitive apiKey). */
+export async function listExternalRepos(): Promise<ListExternalReposResult[]> {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+
+  return prisma.externalRepo.findMany({
+    select: { id: true, name: true, url: true, lastSyncAt: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
