@@ -449,6 +449,18 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
                       </p>
                     </div>
                   ))}
+                  {manceResult.dissenting_views.length > 0 && (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] font-medium text-violet-500/70 uppercase tracking-wider">
+                        Dissenting views
+                      </span>
+                      {manceResult.dissenting_views.map((view, i) => (
+                        <p key={i} className="text-[11px] text-violet-400/70 italic leading-snug">
+                          {view}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   <div className="border-t border-violet-800/20 pt-2 flex flex-col gap-1">
                     <p className="text-[11px] text-violet-300 leading-snug">
                       {manceResult.consensus_summary}

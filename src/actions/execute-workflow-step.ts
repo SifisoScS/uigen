@@ -3,6 +3,10 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { evaluateArtifact } from "@/actions/evaluate-artifact";
+import { critiqueArtifact } from "@/actions/critique-artifact";
+import { scoreCritiqueSuggestions } from "@/actions/score-critique-suggestions";
+import { generateSelectedVariants } from "@/actions/generate-selected-variants";
+import type { WeightedSuggestion } from "@/actions/coordinate-critiques";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -185,22 +189,45 @@ async function dispatchStep(
     }
 
     case "CRITIQUE": {
-      // Stub: returns recorded input; real integration wires critiqueArtifact
       const artifactId = input.artifactId as string;
       if (!artifactId) throw new Error("CRITIQUE step requires artifactId in inputData");
-      return { artifactId, note: "Critique step queued for agent invocation" };
+      const agentName = input.agentName as string | undefined;
+      const agents = input.agents as string[] | undefined;
+      const result = await critiqueArtifact({ artifactId, agentName, agents });
+      return {
+        invocationId: result.invocationId,
+        variantCount: result.variantIds.length,
+        aggregatedCritiqueCount: result.aggregatedCritiques.length,
+        topSuggestion: result.aggregatedCritiques[0]?.suggestions[0] ?? null,
+      };
     }
 
     case "SCORE": {
       const artifactId = input.artifactId as string;
       if (!artifactId) throw new Error("SCORE step requires artifactId in inputData");
-      return { artifactId, note: "Score step queued for suggestion scoring" };
+      const suggestions = (input.suggestions ?? []) as WeightedSuggestion[];
+      const result = await scoreCritiqueSuggestions({ artifactId, suggestions });
+      return {
+        scoredCount: result.scoredSuggestions.length,
+        artifactComplexity: result.artifactComplexity,
+        topSuggestion: result.scoredSuggestions[0]?.text ?? null,
+        autoSelectCount: result.scoredSuggestions.filter(
+          (s) => s.expectedImpactScore >= 0.65
+        ).length,
+      };
     }
 
     case "GENERATE_VARIANTS": {
       const artifactId = input.artifactId as string;
       if (!artifactId) throw new Error("GENERATE_VARIANTS step requires artifactId in inputData");
-      return { artifactId, note: "Variant generation step queued" };
+      const suggestions = (input.suggestions ?? []) as { text: string; agentName: string }[];
+      if (suggestions.length === 0)
+        throw new Error("GENERATE_VARIANTS step requires at least one suggestion");
+      const result = await generateSelectedVariants({ artifactId, suggestions });
+      return {
+        variantIds: result.variantIds,
+        variantCount: result.variantIds.length,
+      };
     }
 
     default:
