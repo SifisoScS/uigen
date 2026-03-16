@@ -8,6 +8,15 @@ vi.mock("@/actions/get-governance-events", () => ({
   getGovernanceEvents: vi.fn(),
 }));
 
+vi.mock("@/actions/get-ikhaya-narrative", () => ({
+  getIKhayaNarrative: vi.fn().mockResolvedValue({
+    narrative: "The council spoke in the spirit of Ubuntu.",
+    confidence: 0.9,
+    tone: "affirming",
+    references: [],
+  }),
+}));
+
 vi.mock("@/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -15,6 +24,7 @@ vi.mock("@/components/ui/scroll-area", () => ({
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getGovernanceEvents } = await import("@/actions/get-governance-events");
+const { getIKhayaNarrative } = await import("@/actions/get-ikhaya-narrative");
 const { GovernanceLog } = await import("../GovernanceLog");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -182,5 +192,89 @@ describe("GovernanceLog — Ubuntu score badge", () => {
     render(<GovernanceLog projectId="proj-1" />);
     await screen.findByText("U —");
     expect(screen.queryByText(/gate:/)).toBeNull();
+  });
+});
+
+describe("GovernanceLog — iKhaya AI explain panel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows Explain button on gate-aware events with ubuntuScore", async () => {
+    vi.mocked(getGovernanceEvents).mockResolvedValue([
+      makeEvent({
+        details: { ubuntuScore: 0.82, gateLogEntryId: "a".repeat(64) },
+      }),
+    ] as never);
+
+    render(<GovernanceLog projectId="proj-1" />);
+    const btn = await screen.findByText("Explain");
+    expect(btn).toBeTruthy();
+  });
+
+  it("does NOT show Explain button on non-gate-aware events", async () => {
+    vi.mocked(getGovernanceEvents).mockResolvedValue([
+      makeEvent({
+        type: "BRANCH_POLICY_SET",
+        details: { branchName: "release/v1", policyType: "HUMAN_ONLY" },
+      }),
+    ] as never);
+
+    render(<GovernanceLog projectId="proj-1" />);
+    await screen.findByText("Policy set");
+    expect(screen.queryByText("Explain")).toBeNull();
+  });
+
+  it("calls getIKhayaNarrative and shows narrative when Explain is clicked", async () => {
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    vi.mocked(getGovernanceEvents).mockResolvedValue([
+      makeEvent({
+        details: { ubuntuScore: 0.82, gateLogEntryId: "b".repeat(64) },
+      }),
+    ] as never);
+    vi.mocked(getIKhayaNarrative).mockResolvedValue({
+      narrative: "The council spoke in the spirit of Ubuntu.",
+      confidence: 0.9,
+      tone: "affirming",
+      references: [],
+    });
+
+    render(<GovernanceLog projectId="proj-1" />);
+    const btn = await screen.findByText("Explain");
+    await user.click(btn);
+
+    const narrative = await screen.findByText("The council spoke in the spirit of Ubuntu.");
+    expect(narrative).toBeTruthy();
+    expect(vi.mocked(getIKhayaNarrative)).toHaveBeenCalledWith(
+      expect.objectContaining({ ubuntuScore: 0.82 })
+    );
+  });
+
+  it("toggles narrative panel off when Explain is clicked again", async () => {
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    vi.mocked(getGovernanceEvents).mockResolvedValue([
+      makeEvent({
+        details: { ubuntuScore: 0.82, gateLogEntryId: "c".repeat(64) },
+      }),
+    ] as never);
+
+    render(<GovernanceLog projectId="proj-1" />);
+    const btn = await screen.findByText("Explain");
+
+    await user.click(btn);
+    const hideBtn = await screen.findByText("Hide");
+    expect(hideBtn).toBeTruthy();
+
+    await user.click(hideBtn);
+    expect(screen.queryByText("Hide")).toBeNull();
+    expect(screen.queryByText("Explain")).toBeTruthy();
   });
 });

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, Loader2 } from "lucide-react";
+import { Shield, Loader2, Sparkles } from "lucide-react";
 import { getGovernanceEvents } from "@/actions/get-governance-events";
+import { getIKhayaNarrative } from "@/actions/get-ikhaya-narrative";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface GovernanceEvent {
@@ -141,9 +142,55 @@ function eventAccent(type: string): string {
   }
 }
 
+// ── iKhaya narrative panel ────────────────────────────────────────────────────
+
+interface IKhayaPanelProps {
+  artifactId: string;
+  ubuntuScore: number;
+  gateLogEntryId: string;
+}
+
+function IKhayaPanel({ artifactId, ubuntuScore, gateLogEntryId }: IKhayaPanelProps) {
+  const [narrative, setNarrative] = useState<string | null>(null);
+  const [tone, setTone] = useState<string>("affirming");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getIKhayaNarrative({ artifactId, ubuntuScore, gateLogEntryId })
+      .then((res) => {
+        setNarrative(res.narrative);
+        setTone(res.tone);
+      })
+      .catch(() => setNarrative("iKhaya AI is unavailable at this time."))
+      .finally(() => setLoading(false));
+  }, [artifactId, ubuntuScore, gateLogEntryId]);
+
+  const accentClass =
+    tone === "affirming" ? "border-emerald-900 bg-emerald-950/40 text-emerald-300" :
+    tone === "cautionary" ? "border-amber-900 bg-amber-950/40 text-amber-300" :
+    tone === "bypassed" ? "border-neutral-800 bg-neutral-900/40 text-neutral-400" :
+    "border-red-900 bg-red-950/40 text-red-300";
+
+  return (
+    <div className={`mt-1.5 px-2 py-1.5 rounded border text-[10px] leading-relaxed ${accentClass}`}>
+      {loading ? (
+        <span className="flex items-center gap-1 text-neutral-500">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          iKhaya AI is interpreting…
+        </span>
+      ) : (
+        <span>{narrative}</span>
+      )}
+    </div>
+  );
+}
+
+// ── GovernanceLog component ───────────────────────────────────────────────────
+
 export function GovernanceLog({ projectId }: { projectId: string }) {
   const [events, setEvents] = useState<GovernanceEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     getGovernanceEvents(projectId)
@@ -225,6 +272,29 @@ export function GovernanceLog({ projectId }: { projectId: string }) {
                 <p className="text-[9px] text-neutral-700 mt-0.5">
                   by {evt.actor}
                 </p>
+              )}
+
+              {isGateAware && ubuntuScore !== undefined && gateLogEntryId && (
+                <>
+                  <button
+                    onClick={() =>
+                      setExpandedId(expandedId === evt.id ? null : evt.id)
+                    }
+                    className="mt-1 flex items-center gap-0.5 text-[9px] text-neutral-600 hover:text-violet-400 transition-colors"
+                    title="Ask iKhaya AI to interpret this governance event"
+                  >
+                    <Sparkles className="h-2.5 w-2.5" />
+                    {expandedId === evt.id ? "Hide" : "Explain"}
+                  </button>
+
+                  {expandedId === evt.id && (
+                    <IKhayaPanel
+                      artifactId={evt.id}
+                      ubuntuScore={ubuntuScore}
+                      gateLogEntryId={gateLogEntryId}
+                    />
+                  )}
+                </>
               )}
             </div>
           );
