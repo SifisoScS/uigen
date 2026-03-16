@@ -8,8 +8,10 @@ import { AncestryChain } from "@/components/AncestryChain";
 import { ArtifactIntrospection } from "./ArtifactIntrospection";
 import { VariantApprovalCard } from "./VariantApprovalCard";
 import { MultiAgentCritiquePanel } from "./MultiAgentCritiquePanel";
+import { EvaluationPanel } from "./EvaluationPanel";
 import { getArtifactLineage } from "@/actions/get-artifact-lineage";
 import { getArtifactLineageDeep } from "@/actions/get-artifact-lineage";
+import type { EvaluationMetrics } from "@/lib/evaluation/metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +52,17 @@ export default async function SharePage({
 
   if (!artifact) notFound();
 
-  const [manifest, lineage, deep] = await Promise.all([
+  const [manifest, lineage, deep, latestEval] = await Promise.all([
     Promise.resolve(artifact.manifest as Record<string, unknown>),
     getArtifactLineage(artifactId).catch(() => ({ parent: null, children: [] as never[] })),
     getArtifactLineageDeep(artifactId, 1).catch(() => null),
+    prisma.evaluationRun
+      .findFirst({
+        where: { artifactId },
+        orderBy: { createdAt: "desc" },
+        select: { status: true, metrics: true },
+      })
+      .catch(() => null),
   ]);
   const crossParents = deep?.crossParents ?? [];
   const variants = deep?.variants ?? [];
@@ -148,6 +157,13 @@ export default async function SharePage({
             Verified
           </span>
         </div>
+
+        {/* Evaluation panel */}
+        <EvaluationPanel
+          artifactId={artifactId}
+          initialStatus={latestEval?.status ?? null}
+          initialMetrics={(latestEval?.metrics as EvaluationMetrics | null) ?? null}
+        />
 
         {/* Manifest viewer */}
         <ManifestViewer manifest={artifact.manifest} />

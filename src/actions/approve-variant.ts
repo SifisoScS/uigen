@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recordVariantOutcome } from "@/lib/agent-reputation";
 import { checkWithSovereignGate } from "@/lib/sifiso-gate";
+import { writePresenceObservation } from "@/lib/pkl-bridge";
 
 export type VariantStatus = "DRAFT" | "APPROVED" | "REJECTED";
 
@@ -70,6 +71,19 @@ export async function approveVariant(
         gateLogEntryId: gateResult.log_entry_id,
       },
     },
+  });
+
+  // PKL memory write — fail-open
+  await writePresenceObservation({
+    key: `uigen:variant_${newStatus.toLowerCase()}:${projectId}`,
+    value: {
+      event_type: approved ? "variant_approved" : "variant_rejected",
+      variant_id: projectId,
+      artifact_id: relation.parentId,
+      approved_by: session.userId,
+      timestamp: Date.now(),
+    },
+    category: "uigen",
   });
 
   return { status: newStatus };

@@ -19,7 +19,8 @@
 export type UIGenGateAction =
   | "artifact_publish"
   | "variant_approve"
-  | "variant_publish";
+  | "variant_publish"
+  | "blueprint_submit";
 
 export interface UIGenGatePayload {
   uigen_action: UIGenGateAction;
@@ -47,6 +48,10 @@ export interface UIGenGatePayload {
   added_components?: string[];
   /** Component types removed in this generation. */
   removed_components?: string[];
+  /** Type of artifact being submitted to The Forge (e.g. "ui-component", "page"). */
+  artifact_type?: string;
+  /** Human-readable description of the blueprint being submitted. */
+  blueprint_description?: string;
 }
 
 export interface UbuntuDimensions {

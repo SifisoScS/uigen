@@ -3,6 +3,7 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { detectConflicts, type ConflictingFile } from "@/lib/virtual-fs-utils";
+import { writePresenceObservation } from "@/lib/pkl-bridge";
 
 export type MergeResult =
   | { type: "ok"; mergedAt: Date }
@@ -107,6 +108,19 @@ export async function mergeVariant({
         originalProjectId: artifact.projectId,
       },
     },
+  });
+
+  // PKL memory write — fail-open
+  await writePresenceObservation({
+    key: `uigen:variant_merged:${variantProjectId}`,
+    value: {
+      event_type: "variant_merged",
+      artifact_id: originalArtifactId,
+      variant_id: variantProjectId,
+      resolved_conflicts: false,
+      timestamp: Date.now(),
+    },
+    category: "uigen",
   });
 
   return { type: "ok", mergedAt };

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { computeEvaluationMetrics, PASS_THRESHOLD } from "@/lib/evaluation/metrics";
 import { detectRegressions } from "@/lib/evaluation/regression";
+import { writePresenceObservation } from "@/lib/pkl-bridge";
 import type { EvaluationMetrics } from "@/lib/evaluation/metrics";
 import type { RegressionReport } from "@/lib/evaluation/regression";
 
@@ -101,6 +102,21 @@ export async function evaluateArtifact({
         baselineArtifactId: resolvedBaselineId,
       },
     },
+  });
+
+  // 5b. PKL memory write — fail-open
+  await writePresenceObservation({
+    key: `uigen:evaluation_completed:${artifactId}`,
+    value: {
+      event_type: "evaluation_completed",
+      artifact_id: artifactId,
+      evaluation_run_id: evaluationRun.id,
+      status,
+      overall_score: metrics.overallScore,
+      regression_detected: regressionDetected,
+      timestamp: Date.now(),
+    },
+    category: "uigen",
   });
 
   // 6. Governance: REGRESSION_DETECTED (only when applicable)
