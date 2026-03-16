@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAgentReputationScore } from "@/lib/agent-reputation";
+import { writePresenceObservation } from "@/lib/pkl-bridge";
 
 // ── Critique schema ────────────────────────────────────────────────────────────
 
@@ -232,6 +233,20 @@ export async function critiqueArtifact({
     // Sort by finalScore descending — highest-ranked agent first
     aggregatedCritiques.sort((a, b) => b.finalScore - a.finalScore);
 
+    // PKL memory write — fail-open
+    await writePresenceObservation({
+      key: `uigen:critique_completed:${artifactId}`,
+      value: {
+        event_type: "critique_completed",
+        artifact_id: artifactId,
+        agent_count: aggregatedCritiques.length,
+        top_agent_name: aggregatedCritiques[0]?.agentName ?? null,
+        top_agent_score: aggregatedCritiques[0]?.finalScore ?? 0,
+        timestamp: Date.now(),
+      },
+      category: "uigen",
+    });
+
     // In multi-agent mode: no auto-variant creation — user selects via generateSelectedVariants
     return {
       invocationId: aggregatedCritiques[0]?.invocationId ?? "",
@@ -327,6 +342,22 @@ export async function critiqueArtifact({
   }
 
   const reputation = await getAgentReputationScore(agentName);
+  const finalScore = parseFloat((reputation / 1).toFixed(4));
+
+  // PKL memory write — fail-open
+  await writePresenceObservation({
+    key: `uigen:critique_completed:${artifactId}`,
+    value: {
+      event_type: "critique_completed",
+      artifact_id: artifactId,
+      agent_count: 1,
+      top_agent_name: agentName,
+      top_agent_score: finalScore,
+      timestamp: Date.now(),
+    },
+    category: "uigen",
+  });
+
   return {
     invocationId: invocation.id,
     variantIds,
@@ -336,7 +367,7 @@ export async function critiqueArtifact({
         issues: critiqueJson.issues,
         suggestions: critiqueJson.suggestions,
         priority: 1,
-        finalScore: parseFloat((reputation / 1).toFixed(4)),
+        finalScore,
         invocationId: invocation.id,
       },
     ] as AggregatedCritique[],
