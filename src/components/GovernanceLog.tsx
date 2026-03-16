@@ -13,6 +13,48 @@ interface GovernanceEvent {
   timestamp: Date;
 }
 
+/** Event types that carry a Sovereign Gate result in their details. */
+const GATE_AWARE_EVENTS = new Set([
+  "ARTIFACT_PUBLISHED",
+  "ARTIFACT_VARIANT_APPROVED",
+  "ARTIFACT_VARIANT_REJECTED",
+  "ARTIFACT_VARIANT_PUBLISHED",
+]);
+
+const BYPASSED_LOG_ID = "0".repeat(64);
+
+interface GateDetails {
+  ubuntuScore?: number;
+  gateLogEntryId?: string;
+  branchName?: string;
+  policyType?: string;
+}
+
+function UbuntuScoreBadge({ score, bypassed }: { score: number; bypassed: boolean }) {
+  if (bypassed) {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono bg-neutral-800 text-neutral-500 border border-neutral-700">
+        U —
+      </span>
+    );
+  }
+
+  const pct = Math.round(score * 100);
+  const color =
+    score >= 0.75 ? "text-emerald-400 border-emerald-800 bg-emerald-950" :
+    score >= 0.65 ? "text-amber-400 border-amber-800 bg-amber-950" :
+                   "text-red-400 border-red-800 bg-red-950";
+
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono border ${color}`}
+      title={`Ubuntu alignment score: ${score.toFixed(3)}`}
+    >
+      U {pct}
+    </span>
+  );
+}
+
 function relativeTime(date: Date): string {
   const diffMs = Date.now() - new Date(date).getTime();
   const diffMins = Math.floor(diffMs / 60_000);
@@ -134,10 +176,11 @@ export function GovernanceLog({ projectId }: { projectId: string }) {
     <ScrollArea className="flex-1 min-h-0">
       <div className="px-2 py-1 space-y-0.5">
         {events.map((evt) => {
-          const details = evt.details as {
-            branchName?: string;
-            policyType?: string;
-          } | null;
+          const details = evt.details as GateDetails | null;
+          const isGateAware = GATE_AWARE_EVENTS.has(evt.type);
+          const ubuntuScore = details?.ubuntuScore;
+          const gateLogEntryId = details?.gateLogEntryId;
+          const bypassed = gateLogEntryId === BYPASSED_LOG_ID;
 
           return (
             <div
@@ -150,9 +193,14 @@ export function GovernanceLog({ projectId }: { projectId: string }) {
                 >
                   {eventLabel(evt.type)}
                 </span>
-                <span className="text-[10px] text-neutral-600 flex-shrink-0">
-                  {relativeTime(evt.timestamp)}
-                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {isGateAware && ubuntuScore !== undefined && (
+                    <UbuntuScoreBadge score={ubuntuScore} bypassed={bypassed} />
+                  )}
+                  <span className="text-[10px] text-neutral-600">
+                    {relativeTime(evt.timestamp)}
+                  </span>
+                </div>
               </div>
 
               {details?.branchName && (
@@ -163,6 +211,13 @@ export function GovernanceLog({ projectId }: { projectId: string }) {
                       → {details.policyType}
                     </span>
                   )}
+                </p>
+              )}
+
+              {isGateAware && gateLogEntryId && !bypassed && (
+                <p className="text-[9px] text-neutral-700 font-mono mt-0.5 truncate"
+                   title={`Gate log entry: ${gateLogEntryId}`}>
+                  gate: {gateLogEntryId.slice(0, 16)}…
                 </p>
               )}
 
