@@ -11,6 +11,8 @@ No free-form code hallucinations: Claude uses **structured tool calls** only (`s
   <em>Chat → Claude tool calls → Virtual FS updates → Babel → sandboxed iframe preview</em>
 </p>
 
+> **Sovereign stack:** UIGen is the cognition engine of the [KilimanjaroCode](https://github.com/KilimanjaroCode) sovereign stack. Cross-repo API schemas are governed by the [SOVEREIGN_CONTRACT](https://github.com/KilimanjaroCode/sovereign-contract) (v1.0).
+
 [![Next.js 15](https://img.shields.io/badge/Next.js_15-black?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/React_19-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://react.dev/)
 [![Tailwind v4](https://img.shields.io/badge/Tailwind_CSS_v4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
