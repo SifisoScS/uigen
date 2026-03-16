@@ -11,6 +11,11 @@ import {
   type ScoredSuggestion,
   AUTO_SELECT_THRESHOLD,
 } from "@/actions/score-critique-suggestions";
+import {
+  getIKhayaManceNarrative,
+  type GetIKhayaManceNarrativeInput,
+} from "@/actions/get-ikhaya-mance-narrative";
+import type { MANCEDeliberateResponse } from "@/lib/ikhaya";
 
 interface FlatSuggestion extends ScoredSuggestion {
   agentName: string;
@@ -49,10 +54,12 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
   const [scoreError, setScoreError] = useState<string | null>(null);
   const [generated, setGenerated] = useState(false);
   const [merged, setMerged] = useState<MergedCritique | null>(null);
+  const [manceResult, setManceResult] = useState<MANCEDeliberateResponse | null>(null);
   const [isCritiquing, startCritique] = useTransition();
   const [isGenerating, startGenerate] = useTransition();
   const [isCoordinating, startCoordinate] = useTransition();
   const [isScoring, startScore] = useTransition();
+  const [isMancing, startMance] = useTransition();
 
   // Fall back to a flat list derived from raw critiques when scoring hasn't run yet
   const flatSuggestions: FlatSuggestion[] = scoredSuggestions ?? (critiques
@@ -117,6 +124,26 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
       try {
         const coordResult = await coordinateCritiques({ artifactId, agentCritiques: critiques });
         setMerged(coordResult.mergedCritique);
+
+        // Fire MANCE council deliberation non-blocking after merge
+        const manceInput: GetIKhayaManceNarrativeInput = {
+          artifactId,
+          agentNames: critiques.map((c) => c.agentName),
+          prompt: `Review the merged critique for artifact ${artifactId} and advise whether the community should proceed.`,
+          mergedSuggestions: coordResult.mergedCritique.weightedSuggestions.map((ws) => ({
+            text: ws.text,
+            score: ws.score,
+          })),
+          topAgent: coordResult.mergedCritique.topAgentName ?? undefined,
+        };
+        startMance(async () => {
+          try {
+            const manceResponse = await getIKhayaManceNarrative(manceInput);
+            setManceResult(manceResponse);
+          } catch {
+            // MANCE is advisory — silently fail, never block the critique flow
+          }
+        });
 
         // Score the merged suggestions immediately
         startScore(async () => {
@@ -391,6 +418,47 @@ export function MultiAgentCritiquePanel({ artifactId }: { artifactId: string }) 
                 )}
                 {generated ? "Variants generated" : "Use merged"}
               </button>
+            </div>
+          )}
+
+          {/* iKhaya MANCE council panel — advisory, never decisive */}
+          {(isMancing || manceResult) && (
+            <div
+              data-testid="mance-council-panel"
+              className="rounded-lg border border-violet-800/30 bg-violet-950/10 p-3 flex flex-col gap-2"
+            >
+              <p className="text-[10px] font-medium text-violet-400 uppercase tracking-wider flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                iKhaya council — advisory
+              </p>
+              {isMancing && !manceResult && (
+                <div className="flex items-center gap-1.5 text-[11px] text-violet-500">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  The council is deliberating…
+                </div>
+              )}
+              {manceResult && (
+                <div className="flex flex-col gap-2">
+                  {manceResult.deliberation_transcript.map((entry, i) => (
+                    <div key={i} className="flex flex-col gap-0.5">
+                      <span className="text-[9px] font-medium text-violet-500 uppercase tracking-wider">
+                        {entry.agent}
+                      </span>
+                      <p className="text-[11px] text-neutral-400 leading-snug">
+                        {entry.statement}
+                      </p>
+                    </div>
+                  ))}
+                  <div className="border-t border-violet-800/20 pt-2 flex flex-col gap-1">
+                    <p className="text-[11px] text-violet-300 leading-snug">
+                      {manceResult.consensus_summary}
+                    </p>
+                    <p className="text-[10px] text-violet-500 italic">
+                      Council recommends: {manceResult.recommended_action}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
