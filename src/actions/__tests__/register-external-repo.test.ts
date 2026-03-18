@@ -42,12 +42,12 @@ beforeEach(() => {
   vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.externalRepo.create).mockResolvedValue(REPO as never);
   vi.mocked(prisma.externalRepo.findMany).mockResolvedValue([REPO] as never);
-  // Default: handshake succeeds with a node DID
+    // Default: handshake succeeds with a node DID and public key
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({
       accepted: true,
-      my_node_info: { node_did: "did:key:zabc123" },
+      my_node_info: { node_did: "did:key:zabc123", public_key: "aa".repeat(32) },
     }),
   }));
 });
@@ -102,6 +102,27 @@ describe("registerExternalRepo — mesh handshake", () => {
     );
     expect(prisma.externalRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ nodeId: "did:key:zabc123" }) })
+    );
+  });
+
+  it("stores publicKey from handshake when my_node_info.public_key present (§17)", async () => {
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+    expect(prisma.externalRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ publicKey: "aa".repeat(32) }) })
+    );
+  });
+
+  it("stores null publicKey when handshake response has no public_key", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accepted: true,
+        my_node_info: { node_did: "did:key:zabc123" },  // no public_key field
+      }),
+    }));
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+    expect(prisma.externalRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ publicKey: null }) })
     );
   });
 

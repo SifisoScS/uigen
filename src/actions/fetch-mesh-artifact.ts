@@ -1,6 +1,7 @@
 "use server";
 
 import { getSession } from "@/lib/auth";
+import { verifyEd25519 } from "@/lib/ed25519";
 import { buildLineageGraph, type LineageGraph } from "@/lib/lineage-graph";
 import {
   fetchMeshArtifact,
@@ -46,7 +47,7 @@ export async function fetchMeshArtifactAction(
 
   const repo = await prisma.externalRepo.findUnique({
     where: { id: externalRepoId },
-    select: { id: true, name: true, url: true, nodeId: true },
+    select: { id: true, name: true, url: true, nodeId: true, publicKey: true },
   });
   if (!repo) throw new Error("ExternalRepo not found");
 
@@ -61,12 +62,30 @@ export async function fetchMeshArtifactAction(
     throw new Error("Missing signature on Mesh artifact response");
   }
 
+  // §17.5 Rule 4 — verify artifact signature when publicKey is available
+  if (repo.publicKey) {
+    const canonical = `${artifactId}:${response.summary.content_hash}`;
+    const valid = verifyEd25519(response.signature, canonical, repo.publicKey);
+    if (!valid) throw new Error("Artifact signature verification failed");
+  }
+
   // §15 — fetch lineage; best-effort, empty graph on failure
   let lineageGraph: LineageGraph;
+  let hops: Awaited<ReturnType<typeof fetchMeshLineage>> = [];
   try {
-    const hops = await fetchMeshLineage(repo.url, artifactId, AbortSignal.timeout(5_000));
+    hops = await fetchMeshLineage(repo.url, artifactId, AbortSignal.timeout(5_000));
+    // §17.5 Rule 4 — verify each hop signature (best-effort: wrong sig = hard fail)
+    if (repo.publicKey) {
+      for (const hop of hops) {
+        const canonical = `${hop.node_did}:${hop.mesh_id}:${hop.timestamp}`;
+        if (hop.signature && !verifyEd25519(hop.signature, canonical, repo.publicKey)) {
+          throw new Error(`Lineage hop signature invalid for node ${hop.node_did}`);
+        }
+      }
+    }
     lineageGraph = buildLineageGraph(artifactId, hops);
-  } catch {
+  } catch (err) {
+    if (String(err).includes("signature")) throw err;   // re-throw verification failures
     lineageGraph = buildLineageGraph(artifactId, []);
   }
 

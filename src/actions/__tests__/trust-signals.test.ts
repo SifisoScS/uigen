@@ -56,7 +56,7 @@ const ARTIFACT_RESPONSE = {
   summary: {
     artifact_id: "mesh:art-001",
     origin_node_did: "did:key:zabc123",
-    lineage_hops: [{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1_700_000_000 }],
+    lineage_hops: [{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1_700_000_000, signature: "" }],
     content_hash: "deadbeef".repeat(8),
     content_mime: "application/json",
     gate_log_merkle: "cafe1234".repeat(8),

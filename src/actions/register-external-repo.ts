@@ -1,6 +1,7 @@
 "use server";
 
 import { getSession } from "@/lib/auth";
+import { type MeshHandshakeResponse } from "@/lib/mesh-client";
 import { prisma } from "@/lib/prisma";
 
 export interface RegisterExternalRepoInput {
@@ -42,28 +43,30 @@ export async function registerExternalRepo(
     };
   }
 
-  // Optional mesh handshake (§13) — non-fatal; repo creation always proceeds
+  // Optional mesh handshake (§13 + §17) — non-fatal; repo creation always proceeds
   let nodeId: string | null = null;
+  let publicKey: string | null = null;
   try {
     const normalizedUrl = url.replace(/\/$/, "");
     const hsRes = await fetch(`${normalizedUrl}/mesh/handshake`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ signature: "stub-phase-40" }),
+      body: JSON.stringify({ signature: "stub-phase-44" }),
       signal: AbortSignal.timeout(5000),
     });
     if (hsRes.ok) {
-      const hs = (await hsRes.json()) as { accepted?: boolean; my_node_info?: { node_did?: string } };
+      const hs = (await hsRes.json()) as MeshHandshakeResponse;
       if (hs.accepted && hs.my_node_info?.node_did) {
         nodeId = hs.my_node_info.node_did;
+        publicKey = hs.my_node_info.public_key ?? null;   // §17 — store for verification
       }
     }
   } catch {
-    // network failure or timeout — nodeId stays null
+    // network failure or timeout — nodeId/publicKey stay null
   }
 
   const repo = await prisma.externalRepo.create({
-    data: { name, url, apiKey: apiKey ?? null, nodeId },
+    data: { name, url, apiKey: apiKey ?? null, nodeId, publicKey },
   });
 
   return {

@@ -14,6 +14,20 @@ export interface LineageHop {
   node_did: string;
   mesh_id: string;
   timestamp: number;
+  signature: string;   // §17 — Ed25519 hex (128 chars); empty string if not yet signed
+}
+
+/** §17 — Handshake response type (used by register-external-repo). */
+export interface MeshHandshakeResponse {
+  accepted: boolean;
+  reason?: string;
+  my_node_info?: {
+    node_did: string;
+    public_key: string;
+    timestamp: number;
+    [key: string]: unknown;
+  };
+  node_signature?: string;   // §17 — Ed25519 hex of "{node_did}:{timestamp}"
 }
 
 export interface ArtifactSummary {
