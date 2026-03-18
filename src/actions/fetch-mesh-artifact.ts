@@ -1,25 +1,30 @@
 "use server";
 
 import { getSession } from "@/lib/auth";
+import { buildLineageGraph, type LineageGraph } from "@/lib/lineage-graph";
+import { fetchMeshArtifact, fetchMeshLineage, type MeshArtifactResponse } from "@/lib/mesh-client";
 import { prisma } from "@/lib/prisma";
-import { fetchMeshArtifact, type MeshArtifactResponse } from "@/lib/mesh-client";
 
 export interface FetchMeshArtifactResult {
   repoId: string;
   repoName: string;
   nodeId: string | null;
   response: MeshArtifactResponse;
+  lineageGraph: LineageGraph;
   fetchedAt: Date;
 }
 
 /**
- * Fetch a Forge artifact from a registered external Mesh node via
- * GET {repo.url}/mesh/artifact/{artifactId} (§14 Artifact Exchange Protocol).
+ * Fetch a Forge artifact and its cross-node lineage from a registered external
+ * Mesh node (§14 Artifact Exchange + §15 Cross-Node Lineage Sync).
  *
  * Validates:
  * - Authenticated session
  * - Registered ExternalRepo exists
  * - Remote returns a non-empty signature
+ *
+ * Lineage fetch is best-effort — a lineage error returns an empty graph rather
+ * than failing the entire action, since lineage may not yet exist on the remote.
  *
  * No local write occurs — use linkExternalArtifact to persist a cross-repo relation.
  */
@@ -43,9 +48,17 @@ export async function fetchMeshArtifactAction(
     throw new Error(`Mesh artifact fetch failed: ${String(err)}`);
   }
 
-  // Phase 41: signature presence validation (real Ed25519 in Phase 42)
   if (!response.signature) {
     throw new Error("Missing signature on Mesh artifact response");
+  }
+
+  // §15 — fetch lineage; best-effort, empty graph on failure
+  let lineageGraph: LineageGraph;
+  try {
+    const hops = await fetchMeshLineage(repo.url, artifactId, AbortSignal.timeout(5_000));
+    lineageGraph = buildLineageGraph(artifactId, hops);
+  } catch {
+    lineageGraph = buildLineageGraph(artifactId, []);
   }
 
   return {
@@ -53,6 +66,7 @@ export async function fetchMeshArtifactAction(
     repoName: repo.name,
     nodeId: repo.nodeId,
     response,
+    lineageGraph,
     fetchedAt: new Date(),
   };
 }
