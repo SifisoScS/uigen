@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAgentReputationScore } from "@/lib/agent-reputation";
 import { writePresenceObservation } from "@/lib/pkl-bridge";
+import { routeCritiqueToSpecialist } from "@/actions/route-critique-to-specialist";
 
 // ── Critique schema ────────────────────────────────────────────────────────────
 
@@ -164,21 +165,31 @@ export async function critiqueArtifact({
   // ── Multi-agent mode ───────────────────────────────────────────────────────
 
   if (agents && agents.length > 0) {
+    // Phase 21: reorder agents so the specialist appears first (highest priority)
+    let orderedAgents = [...agents];
+    const routing = await routeCritiqueToSpecialist({ artifactId }).catch(() => null);
+    if (routing?.fromSpecialization && orderedAgents.includes(routing.recommendedAgent)) {
+      const idx = orderedAgents.indexOf(routing.recommendedAgent);
+      if (idx > 0) {
+        orderedAgents = [routing.recommendedAgent, ...orderedAgents.filter((_, i) => i !== idx)];
+      }
+    }
+
     // Run all agent critiques in parallel
     const critiqueResults = await Promise.all(
-      agents.map((name) => runAgentCritique(name, critiquePrompt, apiKey))
+      orderedAgents.map((name) => runAgentCritique(name, critiquePrompt, apiKey))
     );
 
     // Fetch reputations from DB in parallel
     const reputations = await Promise.all(
-      agents.map((name) => getAgentReputationScore(name))
+      orderedAgents.map((name) => getAgentReputationScore(name))
     );
 
     // Persist one AgentInvocation per agent and collect aggregated critiques
     const aggregatedCritiques: AggregatedCritique[] = [];
 
-    for (let i = 0; i < agents.length; i++) {
-      const name = agents[i];
+    for (let i = 0; i < orderedAgents.length; i++) {
+      const name = orderedAgents[i];
       const result = critiqueResults[i];
       const priority = i + 1; // 1-indexed; first agent = highest priority
       const reputation = reputations[i];
@@ -214,7 +225,7 @@ export async function critiqueArtifact({
             childId: artifactId,
             relationType: "EVALUATED_BY",
             agentName: name,
-            agentCount: agents.length,
+            agentCount: orderedAgents.length,
             topSuggestion: (result.suggestions[0] ?? "").slice(0, 80),
           },
         },

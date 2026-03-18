@@ -17,10 +17,20 @@ vi.mock("@/actions/aggregate-descendant-metrics", () => ({
   aggregateDescendantMetrics: vi.fn(),
 }));
 
+vi.mock("@/actions/analyze-agent-specializations", () => ({
+  analyzeAgentSpecializations: vi.fn().mockResolvedValue({ agentName: "Claude", skills: [] }),
+}));
+
+vi.mock("@/actions/assign-agent-roles", () => ({
+  assignAgentRoles: vi.fn().mockResolvedValue({ projectId: "proj-1", assigned: [] }),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { prisma } = await import("@/lib/prisma");
 const { aggregateDescendantMetrics } = await import("@/actions/aggregate-descendant-metrics");
+const { analyzeAgentSpecializations } = await import("@/actions/analyze-agent-specializations");
+const { assignAgentRoles } = await import("@/actions/assign-agent-roles");
 const { processGovernanceEvent, evaluateCondition } = await import("../rule-engine");
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -35,6 +45,8 @@ beforeEach(() => {
   vi.mocked(aggregateDescendantMetrics).mockResolvedValue({
     artifactId: "art-1", descendantCount: 1, metrics: {} as never,
   });
+  vi.mocked(analyzeAgentSpecializations).mockResolvedValue({ agentName: "Claude", skills: [] });
+  vi.mocked(assignAgentRoles).mockResolvedValue({ projectId: "proj-1", assigned: [] });
 });
 
 // ── evaluateCondition ─────────────────────────────────────────────────────────
@@ -168,6 +180,30 @@ describe("processGovernanceEvent — built-in rules", () => {
     });
 
     expect(result.firedRules).toHaveLength(0);
+  });
+
+  it("fires ANALYZE_SPECIALIZATIONS on AGENT_REPUTATION_UPDATED unconditionally", async () => {
+    const result = await processGovernanceEvent({
+      type: "AGENT_REPUTATION_UPDATED",
+      projectId: "proj-1",
+      details: { agentName: "Claude", newScore: 0.9 },
+    });
+
+    const fired = result.firedRules.find((r) => r.actionType === "ANALYZE_SPECIALIZATIONS");
+    expect(fired).toBeDefined();
+    expect(fired!.builtIn).toBe(true);
+    expect(analyzeAgentSpecializations).toHaveBeenCalledWith({ agentName: "Claude", projectId: "proj-1" });
+    expect(assignAgentRoles).toHaveBeenCalledWith({ projectId: "proj-1" });
+  });
+
+  it("skips ANALYZE_SPECIALIZATIONS when agentName is missing from event details", async () => {
+    await processGovernanceEvent({
+      type: "AGENT_REPUTATION_UPDATED",
+      projectId: "proj-1",
+      details: { newScore: 0.5 }, // no agentName
+    });
+
+    expect(analyzeAgentSpecializations).not.toHaveBeenCalled();
   });
 });
 

@@ -13,10 +13,11 @@ export interface RuleCondition {
 }
 
 export type ActionType =
-  | "LOCK_BRANCH"          // lock all release/* branches for the event's projectId
-  | "DEMOTE_AGENT"         // lower AgentReputation.score; log AGENT_DEMOTED
-  | "TRIGGER_AGGREGATION"  // aggregate descendant metrics for the artifact
-  | "LOG_EVENT";           // emit an additional GovernanceEvent
+  | "LOCK_BRANCH"             // lock all release/* branches for the event's projectId
+  | "DEMOTE_AGENT"            // lower AgentReputation.score; log AGENT_DEMOTED
+  | "TRIGGER_AGGREGATION"     // aggregate descendant metrics for the artifact
+  | "ANALYZE_SPECIALIZATIONS" // recompute AgentSkillMetric + assignAgentRoles for the agent
+  | "LOG_EVENT";              // emit an additional GovernanceEvent
 
 export interface RuleAction {
   type: ActionType;
@@ -66,6 +67,13 @@ const BUILT_IN_RULES: BuiltInRule[] = [
     eventType: "ARTIFACT_VARIANT_PUBLISHED",
     condition: null,
     action: { type: "TRIGGER_AGGREGATION" },
+  },
+  {
+    id: "builtin:analyze-specializations-on-reputation",
+    name: "Recompute agent specializations when reputation is updated",
+    eventType: "AGENT_REPUTATION_UPDATED",
+    condition: null,
+    action: { type: "ANALYZE_SPECIALIZATIONS" },
   },
 ];
 
@@ -169,6 +177,19 @@ async function executeAction(
       );
       // Non-fatal: aggregation failure should not block the caller
       await aggregateDescendantMetrics({ artifactId }).catch(() => undefined);
+      break;
+    }
+
+    case "ANALYZE_SPECIALIZATIONS": {
+      const agentName = event.details.agentName as string | undefined;
+      if (!agentName) break;
+      const { analyzeAgentSpecializations } = await import(
+        "@/actions/analyze-agent-specializations"
+      );
+      const { assignAgentRoles } = await import("@/actions/assign-agent-roles");
+      // Non-fatal: do not block caller on specialization or role assignment failure
+      await analyzeAgentSpecializations({ agentName, projectId: event.projectId }).catch(() => undefined);
+      await assignAgentRoles({ projectId: event.projectId }).catch(() => undefined);
       break;
     }
 

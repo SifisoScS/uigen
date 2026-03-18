@@ -25,11 +25,21 @@ vi.mock("@ai-sdk/anthropic", () => ({
   anthropic: vi.fn(() => "mock-anthropic-model"),
 }));
 
+vi.mock("@/actions/route-critique-to-specialist", () => ({
+  routeCritiqueToSpecialist: vi.fn().mockResolvedValue({
+    recommendedAgent: "Claude",
+    category: "accessibility",
+    score: 0.85,
+    fromSpecialization: false, // default: no reordering
+  }),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
 const { generateObject } = await import("ai");
+const { routeCritiqueToSpecialist } = await import("@/actions/route-critique-to-specialist");
 const { critiqueArtifact } = await import("../critique-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -451,5 +461,52 @@ describe("critiqueArtifact (ranking heuristics)", () => {
 
     const details = (args as { data: { details: Record<string, unknown> } }).data.details;
     expect((details.topSuggestion as string).length).toBeGreaterThan(0);
+  });
+});
+
+// ── Phase 21 — Specialist routing ─────────────────────────────────────────────
+
+describe("critiqueArtifact — specialist routing", () => {
+  it("calls routeCritiqueToSpecialist in multi-agent mode", async () => {
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    expect(routeCritiqueToSpecialist).toHaveBeenCalledWith({ artifactId: "art-1" });
+  });
+
+  it("reorders agents so the specialist appears first when fromSpecialization=true", async () => {
+    vi.mocked(routeCritiqueToSpecialist).mockResolvedValueOnce({
+      recommendedAgent: "Grok",
+      category: "ux",
+      score: 0.9,
+      fromSpecialization: true,
+    });
+
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    // Grok should have been the first agent run (priority=1 in the invocation loop)
+    const invocations = vi.mocked(prisma.agentInvocation.create).mock.calls;
+    expect((invocations[0][0] as { data: { agentName: string } }).data.agentName).toBe("Grok");
+  });
+
+  it("does NOT reorder agents when fromSpecialization=false", async () => {
+    vi.mocked(routeCritiqueToSpecialist).mockResolvedValueOnce({
+      recommendedAgent: "Grok",
+      category: "ux",
+      score: 0.9,
+      fromSpecialization: false, // reputation fallback — don't override user order
+    });
+
+    await critiqueArtifact({ artifactId: "art-1", agents: ["Claude", "Grok"] });
+
+    const invocations = vi.mocked(prisma.agentInvocation.create).mock.calls;
+    expect((invocations[0][0] as { data: { agentName: string } }).data.agentName).toBe("Claude");
+  });
+
+  it("proceeds normally when routeCritiqueToSpecialist rejects (fail-open)", async () => {
+    vi.mocked(routeCritiqueToSpecialist).mockRejectedValueOnce(new Error("DB unavailable"));
+
+    await expect(
+      critiqueArtifact({ artifactId: "art-1", agents: ["Claude"] })
+    ).resolves.toBeDefined();
   });
 });
