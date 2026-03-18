@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { processGovernanceEvent } from "@/lib/governance/rule-engine";
 
 // Seed scores matching AGENT_REPUTATION in critique-artifact.ts (kept local to avoid circular import)
 const REPUTATION_SEED: Record<string, number> = {
@@ -71,4 +72,11 @@ export async function recordVariantOutcome(
       details: { agentName, approved, newScore, newApproved, newRejected, parentArtifactId },
     },
   });
+
+  // 6. Rule engine — fire-and-forget; non-fatal
+  processGovernanceEvent({
+    type: "AGENT_REPUTATION_UPDATED",
+    projectId,
+    details: { agentName, newScore },
+  }).catch(() => undefined);
 }

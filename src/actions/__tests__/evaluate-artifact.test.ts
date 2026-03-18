@@ -12,10 +12,15 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/governance/rule-engine", () => ({
+  processGovernanceEvent: vi.fn().mockResolvedValue({ eventType: "EVALUATION_RUN_COMPLETED", firedRules: [] }),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
+const { processGovernanceEvent } = await import("@/lib/governance/rule-engine");
 const { evaluateArtifact } = await import("../evaluate-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -198,5 +203,26 @@ describe("evaluateArtifact", () => {
   it("returns evaluationRunId from the created record", async () => {
     const result = await evaluateArtifact({ artifactId: "art-1" });
     expect(result.evaluationRunId).toBe("eval-1");
+  });
+});
+
+// ── Phase 20 — Rule engine wiring ─────────────────────────────────────────────
+
+describe("evaluateArtifact — rule engine", () => {
+  it("calls processGovernanceEvent with EVALUATION_RUN_COMPLETED after emitting event", async () => {
+    await evaluateArtifact({ artifactId: "art-1" });
+
+    expect(processGovernanceEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "EVALUATION_RUN_COMPLETED",
+        details: expect.objectContaining({ artifactId: "art-1" }),
+      })
+    );
+  });
+
+  it("does not throw when processGovernanceEvent rejects (fire-and-forget)", async () => {
+    vi.mocked(processGovernanceEvent).mockRejectedValueOnce(new Error("Rule engine down"));
+
+    await expect(evaluateArtifact({ artifactId: "art-1" })).resolves.toBeDefined();
   });
 });
