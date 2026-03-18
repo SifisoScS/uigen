@@ -14,9 +14,14 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/governance/rule-engine", () => ({
+  processGovernanceEvent: vi.fn().mockResolvedValue({ eventType: "AGENT_REPUTATION_UPDATED", firedRules: [] }),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { prisma } = await import("@/lib/prisma");
+const { processGovernanceEvent } = await import("@/lib/governance/rule-engine");
 const { getAgentReputationScore, recordVariantOutcome } = await import(
   "@/lib/agent-reputation"
 );
@@ -154,5 +159,34 @@ describe("recordVariantOutcome", () => {
         }),
       }),
     );
+  });
+});
+
+// ── Phase 20 — Rule engine wiring ─────────────────────────────────────────────
+
+describe("recordVariantOutcome — rule engine", () => {
+  it("calls processGovernanceEvent with AGENT_REPUTATION_UPDATED after recording", async () => {
+    vi.mocked(prisma.agentReputation.findUnique).mockResolvedValue(
+      makeRepRecord("Claude", 5, 1, 0.86) as never,
+    );
+
+    await recordVariantOutcome("Claude", true, "proj-1", "art-1");
+
+    expect(processGovernanceEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "AGENT_REPUTATION_UPDATED",
+        projectId: "proj-1",
+        details: expect.objectContaining({ agentName: "Claude" }),
+      })
+    );
+  });
+
+  it("does not throw when processGovernanceEvent rejects (fire-and-forget)", async () => {
+    vi.mocked(prisma.agentReputation.findUnique).mockResolvedValue(
+      makeRepRecord("Claude", 5, 1, 0.86) as never,
+    );
+    vi.mocked(processGovernanceEvent).mockRejectedValueOnce(new Error("Rule engine down"));
+
+    await expect(recordVariantOutcome("Claude", true, "proj-1", "art-1")).resolves.toBeUndefined();
   });
 });

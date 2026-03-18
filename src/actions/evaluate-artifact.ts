@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { computeEvaluationMetrics, PASS_THRESHOLD } from "@/lib/evaluation/metrics";
 import { detectRegressions } from "@/lib/evaluation/regression";
 import { writePresenceObservation } from "@/lib/pkl-bridge";
+import { processGovernanceEvent } from "@/lib/governance/rule-engine";
 import type { EvaluationMetrics } from "@/lib/evaluation/metrics";
 import type { RegressionReport } from "@/lib/evaluation/regression";
 
@@ -104,7 +105,14 @@ export async function evaluateArtifact({
     },
   });
 
-  // 5b. PKL memory write — fail-open
+  // 5b. Rule engine — fire-and-forget; non-fatal
+  processGovernanceEvent({
+    type: "EVALUATION_RUN_COMPLETED",
+    projectId: artifact.projectId,
+    details: { status, artifactId, evaluationRunId: evaluationRun.id },
+  }).catch(() => undefined);
+
+  // 5c. PKL memory write — fail-open
   await writePresenceObservation({
     key: `uigen:evaluation_completed:${artifactId}`,
     value: {

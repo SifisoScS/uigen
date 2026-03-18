@@ -11,6 +11,7 @@ import {
 } from "@/lib/artifact-introspection";
 import { computeSemanticDelta } from "@/lib/semantic-delta";
 import { checkWithSovereignGate } from "@/lib/sifiso-gate";
+import { processGovernanceEvent } from "@/lib/governance/rule-engine";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -298,7 +299,14 @@ export async function publishVariantAsArtifact({
     },
   });
 
-  // 16. Create ArtifactRelation linking the two generations
+  // 16. Rule engine — fire-and-forget; non-fatal
+  processGovernanceEvent({
+    type: "ARTIFACT_VARIANT_PUBLISHED",
+    projectId: originalArtifact.projectId,
+    details: { artifactId: newArtifact.id, parentArtifactId: originalArtifactId, version: nextVersion },
+  }).catch(() => undefined);
+
+  // 17. Create ArtifactRelation linking the two generations
   await prisma.artifactRelation.upsert({
     where: {
       parentType_parentId_childType_childId: {

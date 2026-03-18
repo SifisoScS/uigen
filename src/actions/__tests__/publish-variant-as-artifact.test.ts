@@ -36,11 +36,16 @@ vi.mock("@/lib/artifact-introspection", () => ({
   extractStyleSignature: vi.fn(() => ({ classes: [], colors: [], spacing: [], usedComponents: [], propSummary: {} })),
 }));
 
+vi.mock("@/lib/governance/rule-engine", () => ({
+  processGovernanceEvent: vi.fn().mockResolvedValue({ eventType: "ARTIFACT_VARIANT_PUBLISHED", firedRules: [] }),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
 const { checkWithSovereignGate } = await import("@/lib/sifiso-gate");
+const { processGovernanceEvent } = await import("@/lib/governance/rule-engine");
 const { publishVariantAsArtifact } = await import("../publish-variant-as-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -368,5 +373,31 @@ describe("publishVariantAsArtifact — Sovereign Gate", () => {
     expect(checkWithSovereignGate).toHaveBeenCalledWith(
       expect.objectContaining({ evaluation_passed: true })
     );
+  });
+});
+
+// ── Phase 20 — Rule engine wiring ─────────────────────────────────────────────
+
+describe("publishVariantAsArtifact — rule engine", () => {
+  it("calls processGovernanceEvent with ARTIFACT_VARIANT_PUBLISHED after publish", async () => {
+    await publishVariantAsArtifact({
+      variantProjectId: "proj-var-1",
+      originalArtifactId: "art-1",
+    });
+
+    expect(processGovernanceEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ARTIFACT_VARIANT_PUBLISHED",
+        details: expect.objectContaining({ parentArtifactId: "art-1" }),
+      })
+    );
+  });
+
+  it("does not throw when processGovernanceEvent rejects (fire-and-forget)", async () => {
+    vi.mocked(processGovernanceEvent).mockRejectedValueOnce(new Error("Rule engine down"));
+
+    await expect(
+      publishVariantAsArtifact({ variantProjectId: "proj-var-1", originalArtifactId: "art-1" })
+    ).resolves.toBeDefined();
   });
 });
