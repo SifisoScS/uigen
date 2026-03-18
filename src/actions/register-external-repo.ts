@@ -42,8 +42,28 @@ export async function registerExternalRepo(
     };
   }
 
+  // Optional mesh handshake (§13) — non-fatal; repo creation always proceeds
+  let nodeId: string | null = null;
+  try {
+    const normalizedUrl = url.replace(/\/$/, "");
+    const hsRes = await fetch(`${normalizedUrl}/mesh/handshake`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ signature: "stub-phase-40" }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (hsRes.ok) {
+      const hs = (await hsRes.json()) as { accepted?: boolean; my_node_info?: { node_did?: string } };
+      if (hs.accepted && hs.my_node_info?.node_did) {
+        nodeId = hs.my_node_info.node_did;
+      }
+    }
+  } catch {
+    // network failure or timeout — nodeId stays null
+  }
+
   const repo = await prisma.externalRepo.create({
-    data: { name, url, apiKey: apiKey ?? null },
+    data: { name, url, apiKey: apiKey ?? null, nodeId },
   });
 
   return {

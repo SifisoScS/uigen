@@ -42,6 +42,14 @@ beforeEach(() => {
   vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.externalRepo.create).mockResolvedValue(REPO as never);
   vi.mocked(prisma.externalRepo.findMany).mockResolvedValue([REPO] as never);
+  // Default: handshake succeeds with a node DID
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      accepted: true,
+      my_node_info: { node_did: "did:key:zabc123" },
+    }),
+  }));
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -78,6 +86,56 @@ describe("registerExternalRepo", () => {
     await registerExternalRepo({ name: "Secured", url: "https://secure.example.com", apiKey: "sk-abc" });
     expect(prisma.externalRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ apiKey: "sk-abc" }) })
+    );
+  });
+});
+
+// ── Mesh handshake integration (Phase 40 — §13.4) ─────────────────────────────
+
+describe("registerExternalRepo — mesh handshake", () => {
+  it("calls /mesh/handshake and stores node_did as nodeId when accepted", async () => {
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://remote.example.com/mesh/handshake",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(prisma.externalRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ nodeId: "did:key:zabc123" }) })
+    );
+  });
+
+  it("stores null nodeId when handshake fetch throws (network error)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+
+    expect(prisma.externalRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ nodeId: null }) })
+    );
+  });
+
+  it("stores null nodeId when handshake returns accepted: false", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ accepted: false, reason: "Gate check failed" }),
+    }));
+
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+
+    expect(prisma.externalRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ nodeId: null }) })
+    );
+  });
+
+  it("repo is created successfully even when handshake returns non-2xx", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+
+    const result = await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+
+    expect(result.id).toBe("repo-1");
+    expect(prisma.externalRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ nodeId: null }) })
     );
   });
 });
