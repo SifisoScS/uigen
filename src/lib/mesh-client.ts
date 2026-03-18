@@ -64,6 +64,59 @@ export interface PeerNodeDescriptor {
   };
 }
 
+// ── §19 — Distributed Critique types ─────────────────────────────────────────
+
+/** §19.1 — A signed peer critique score for a ManceProposal artifact. */
+export interface CritiqueScore {
+  proposal_id: string;
+  artifact_id: string;
+  critic_node_did: string;
+  score: number;           // 0.0–1.0
+  comment: string;
+  timestamp: number;
+  signature: string;       // Ed25519 hex (128 chars)
+}
+
+/** §19.2 — Aggregate critique result for a proposal. */
+export interface CritiqueAggregate {
+  proposal_id: string;
+  average_score: number;
+  count: number;
+}
+
+// ── §20 — Remote Forge Execution types ───────────────────────────────────────
+
+/** §20.1 — A signed receipt from a remote Forge build execution. */
+export interface BuildReceipt {
+  task_id: string;
+  artifact_id: string;
+  runner_node_did: string;
+  status: "success" | "failure";
+  logs_hash: string;       // SHA-256 hex (64 chars) — never raw logs
+  timestamp: number;
+  signature: string;       // Ed25519 hex (128 chars)
+}
+
+// ── §21 — Mesh Orchestration types ───────────────────────────────────────────
+
+/** §21.1 — Scheduling policy for orchestration decisions. */
+export interface OrchestrationPolicy {
+  min_ubuntu_score: number;
+  max_peers: number;
+  retry_on_failure: boolean;
+  prefer_local_node: boolean;
+  timestamp: number;
+}
+
+/** §21.2 — A signed, policy-visible orchestration decision. */
+export interface OrchestrationDecision {
+  artifact_id: string;
+  candidate_nodes: string[];   // ordered by ubuntu_score desc, DID tiebreaker
+  policy: OrchestrationPolicy;
+  timestamp: number;
+  signature: string;           // Ed25519 hex (128 chars)
+}
+
 /** §17 — Handshake response type (used by register-external-repo). */
 export interface MeshHandshakeResponse {
   accepted: boolean;
