@@ -2,8 +2,15 @@
 
 import { getSession } from "@/lib/auth";
 import { buildLineageGraph, type LineageGraph } from "@/lib/lineage-graph";
-import { fetchMeshArtifact, fetchMeshLineage, type MeshArtifactResponse } from "@/lib/mesh-client";
+import {
+  fetchMeshArtifact,
+  fetchMeshArtifactTrust,
+  fetchMeshLineage,
+  fetchMeshNodeTrust,
+  type MeshArtifactResponse,
+} from "@/lib/mesh-client";
 import { prisma } from "@/lib/prisma";
+import { combineTrustSignals, type EffectiveTrust } from "@/lib/trust-signals";
 
 export interface FetchMeshArtifactResult {
   repoId: string;
@@ -11,20 +18,22 @@ export interface FetchMeshArtifactResult {
   nodeId: string | null;
   response: MeshArtifactResponse;
   lineageGraph: LineageGraph;
+  trust: EffectiveTrust | null;
   fetchedAt: Date;
 }
 
 /**
- * Fetch a Forge artifact and its cross-node lineage from a registered external
- * Mesh node (§14 Artifact Exchange + §15 Cross-Node Lineage Sync).
+ * Fetch a Forge artifact, its cross-node lineage, and trust signals from a
+ * registered external Mesh node (§14 Artifact Exchange + §15 Lineage Sync
+ * + §16 Trust & Reputation Export).
  *
  * Validates:
  * - Authenticated session
  * - Registered ExternalRepo exists
  * - Remote returns a non-empty signature
  *
- * Lineage fetch is best-effort — a lineage error returns an empty graph rather
- * than failing the entire action, since lineage may not yet exist on the remote.
+ * Lineage and trust fetches are best-effort — errors return an empty graph /
+ * null trust rather than failing the entire action (§16.4 Rule 5: Non-Binding).
  *
  * No local write occurs — use linkExternalArtifact to persist a cross-repo relation.
  */
@@ -61,12 +70,26 @@ export async function fetchMeshArtifactAction(
     lineageGraph = buildLineageGraph(artifactId, []);
   }
 
+  // §16 — fetch trust signals; best-effort, null on any failure (§16.4 Rule 5)
+  let trust: EffectiveTrust | null = null;
+  try {
+    const signal = AbortSignal.timeout(5_000);
+    const nodeTrust = await fetchMeshNodeTrust(repo.url, signal);
+    const artifactTrust = await fetchMeshArtifactTrust(repo.url, artifactId, signal).catch(
+      () => null
+    );
+    trust = combineTrustSignals(nodeTrust, artifactTrust);
+  } catch {
+    // network failure or gate denial — trust stays null
+  }
+
   return {
     repoId: repo.id,
     repoName: repo.name,
     nodeId: repo.nodeId,
     response,
     lineageGraph,
+    trust,
     fetchedAt: new Date(),
   };
 }
