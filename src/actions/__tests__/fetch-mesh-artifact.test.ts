@@ -13,13 +13,15 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/mesh-client", () => ({
   fetchMeshArtifact: vi.fn(),
   fetchMeshLineage: vi.fn(),
+  fetchMeshNodeTrust: vi.fn(),
+  fetchMeshArtifactTrust: vi.fn(),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
-const { fetchMeshArtifact, fetchMeshLineage } = await import("@/lib/mesh-client");
+const { fetchMeshArtifact, fetchMeshLineage, fetchMeshNodeTrust, fetchMeshArtifactTrust } = await import("@/lib/mesh-client");
 const { fetchMeshArtifactAction } = await import("../fetch-mesh-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -59,6 +61,8 @@ beforeEach(() => {
   vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue(REPO as never);
   vi.mocked(fetchMeshArtifact).mockResolvedValue(ARTIFACT_RESPONSE);
   vi.mocked(fetchMeshLineage).mockResolvedValue([]);
+  vi.mocked(fetchMeshNodeTrust).mockRejectedValue(new Error("not available"));
+  vi.mocked(fetchMeshArtifactTrust).mockRejectedValue(new Error("not available"));
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
