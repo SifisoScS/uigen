@@ -48,6 +48,8 @@ export default async function SharePage({
       semanticSummary: true,
       componentTree: true,
       styleSignature: true,
+      descendantCount: true,
+      descendantMetrics: true,
     },
   });
 
@@ -72,6 +74,14 @@ export default async function SharePage({
   const tags = Array.isArray(manifest.registryTags)
     ? (manifest.registryTags as string[])
     : [];
+
+  const descendantMetrics = artifact.descendantMetrics as {
+    commonRegressions?: string[];
+    successRate?: number;
+    descendantCount?: number;
+    evaluatedCount?: number;
+  } | null;
+  const commonRegressions = descendantMetrics?.commonRegressions ?? [];
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-neutral-100">
@@ -184,6 +194,26 @@ export default async function SharePage({
             } | null
           }
         />
+
+        {/* Common issues in prior remixes (Phase 19) */}
+        {commonRegressions.length > 0 && (
+          <div
+            data-testid="common-regressions-panel"
+            className="flex flex-col gap-2 p-4 rounded-lg border border-amber-800/30 bg-amber-950/10"
+          >
+            <p className="text-xs font-medium text-amber-400 uppercase tracking-wider">
+              Common issues in prior remixes ({artifact.descendantCount} descendants)
+            </p>
+            <ul className="flex flex-col gap-1">
+              {commonRegressions.map((regression) => (
+                <li key={regression} className="text-xs text-amber-300/80 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500/60 flex-shrink-0" />
+                  {regression}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Multi-agent critique & variant selection */}
         <MultiAgentCritiquePanel artifactId={artifactId} />
