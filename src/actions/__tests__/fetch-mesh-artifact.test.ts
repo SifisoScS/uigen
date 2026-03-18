@@ -17,11 +17,16 @@ vi.mock("@/lib/mesh-client", () => ({
   fetchMeshArtifactTrust: vi.fn(),
 }));
 
+vi.mock("@/lib/ed25519", () => ({
+  verifyEd25519: vi.fn().mockReturnValue(true),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
 const { fetchMeshArtifact, fetchMeshLineage, fetchMeshNodeTrust, fetchMeshArtifactTrust } = await import("@/lib/mesh-client");
+const { verifyEd25519 } = await import("@/lib/ed25519");
 const { fetchMeshArtifactAction } = await import("../fetch-mesh-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -37,13 +42,14 @@ const REPO = {
   name: "Sifiso OS Node",
   url: "https://sifiso.example.com",
   nodeId: "did:key:zabc123",
+  publicKey: "bb".repeat(32),   // §17 — 64-char hex Ed25519 public key
 };
 
 const ARTIFACT_RESPONSE = {
   summary: {
     artifact_id: "mesh:art-001",
     origin_node_did: "did:key:zabc123",
-    lineage_hops: [{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1700000000 }],
+    lineage_hops: [{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1700000000, signature: "cc".repeat(64) }],
     content_hash: "deadbeef".repeat(8),
     content_mime: "application/json",
     gate_log_merkle: "cafe1234".repeat(8),
@@ -92,7 +98,7 @@ describe("fetchMeshArtifactAction", () => {
     expect(result.nodeId).toBe("did:key:zabc123");
     expect(result.response.summary.artifact_id).toBe("mesh:art-001");
     expect(result.response.summary.origin_node_did).toBe("did:key:zabc123");
-    expect(result.response.summary.lineage_hops).toEqual([{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1700000000 }]);
+    expect(result.response.summary.lineage_hops).toEqual([{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1700000000, signature: "cc".repeat(64) }]);
     expect(result.fetchedAt).toBeInstanceOf(Date);
   });
 
@@ -113,5 +119,26 @@ describe("fetchMeshArtifactAction", () => {
     await expect(
       fetchMeshArtifactAction("repo-1", "mesh:art-001")
     ).rejects.toThrow(/Mesh artifact fetch failed/);
+  });
+
+  it("throws when artifact signature verification fails (§17.5 Rule 4)", async () => {
+    vi.mocked(verifyEd25519).mockReturnValueOnce(false);
+
+    await expect(
+      fetchMeshArtifactAction("repo-1", "mesh:art-001")
+    ).rejects.toThrow(/Artifact signature verification failed/);
+  });
+
+  it("skips signature verification when repo has no publicKey", async () => {
+    vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue({
+      ...REPO,
+      publicKey: null,
+    } as never);
+    // verifyEd25519 still returns true but should not be called
+    vi.mocked(verifyEd25519).mockReturnValue(true);
+
+    const result = await fetchMeshArtifactAction("repo-1", "mesh:art-001");
+    expect(result.repoId).toBe("repo-1");
+    expect(verifyEd25519).not.toHaveBeenCalled();
   });
 });

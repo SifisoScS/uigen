@@ -190,6 +190,7 @@ model ExternalRepo {
   url        String    @unique
   apiKey     String?
   nodeId     String?   // DID of remote node, populated after successful mesh handshake (§13)
+  publicKey  String?   // Ed25519 hex public key from handshake (§17)
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt

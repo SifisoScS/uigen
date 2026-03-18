@@ -43,12 +43,14 @@ const HOP_1: LineageHop = {
   node_did: "did:key:zabc123",
   mesh_id: "mesh:art-001",
   timestamp: 1_700_000_000,
+  signature: "",
 };
 
 const HOP_2: LineageHop = {
   node_did: "did:key:zdef456",
   mesh_id: "mesh:art-001",
   timestamp: 1_700_000_100,
+  signature: "",
 };
 
 const ARTIFACT_RESPONSE = {
