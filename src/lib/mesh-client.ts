@@ -17,6 +17,53 @@ export interface LineageHop {
   signature: string;   // §17 — Ed25519 hex (128 chars); empty string if not yet signed
 }
 
+// ── §18 — Multi-Node MANCE & Distributed Forge types ─────────────────────────
+
+/** §18.2 — A signed cross-node MANCE proposal. */
+export interface ManceProposal {
+  proposal_id: string;
+  origin_node_did: string;
+  artifact_id: string;
+  lineage_hops: LineageHop[];
+  trust: {
+    node_ubuntu: number;
+    artifact_confidence: number | null;
+    label: string;
+  };
+  timestamp: number;
+  signature: string;   // Ed25519 hex (128 chars)
+}
+
+/** §18.3 — A signed vote on a ManceProposal. */
+export interface ManceVote {
+  proposal_id: string;
+  voter_node_did: string;
+  vote: "approve" | "reject";
+  reason: string;
+  timestamp: number;
+  signature: string;   // Ed25519 hex (128 chars)
+}
+
+/** §18.4 — A signed distributed Forge build task. */
+export interface ForgeTask {
+  task_id: string;
+  proposal_id: string;
+  assigned_node_did: string;
+  artifact_id: string;
+  timestamp: number;
+  signature: string;   // Ed25519 hex (128 chars)
+}
+
+/** §18.5 — Peer node descriptor for ForgeTask assignment. */
+export interface PeerNodeDescriptor {
+  node_did: string;
+  trust: {
+    node_ubuntu: number;
+    artifact_confidence?: number | null;
+    label: string;
+  };
+}
+
 /** §17 — Handshake response type (used by register-external-repo). */
 export interface MeshHandshakeResponse {
   accepted: boolean;
