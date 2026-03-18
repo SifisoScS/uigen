@@ -12,13 +12,14 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/mesh-client", () => ({
   fetchMeshArtifact: vi.fn(),
+  fetchMeshLineage: vi.fn(),
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
-const { fetchMeshArtifact } = await import("@/lib/mesh-client");
+const { fetchMeshArtifact, fetchMeshLineage } = await import("@/lib/mesh-client");
 const { fetchMeshArtifactAction } = await import("../fetch-mesh-artifact");
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ const ARTIFACT_RESPONSE = {
   summary: {
     artifact_id: "mesh:art-001",
     origin_node_did: "did:key:zabc123",
-    lineage_hops: ["did:key:zabc123"],
+    lineage_hops: [{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1700000000 }],
     content_hash: "deadbeef".repeat(8),
     content_mime: "application/json",
     gate_log_merkle: "cafe1234".repeat(8),
@@ -57,6 +58,7 @@ beforeEach(() => {
   vi.mocked(getSession).mockResolvedValue(SESSION);
   vi.mocked(prisma.externalRepo.findUnique).mockResolvedValue(REPO as never);
   vi.mocked(fetchMeshArtifact).mockResolvedValue(ARTIFACT_RESPONSE);
+  vi.mocked(fetchMeshLineage).mockResolvedValue([]);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -86,7 +88,7 @@ describe("fetchMeshArtifactAction", () => {
     expect(result.nodeId).toBe("did:key:zabc123");
     expect(result.response.summary.artifact_id).toBe("mesh:art-001");
     expect(result.response.summary.origin_node_did).toBe("did:key:zabc123");
-    expect(result.response.summary.lineage_hops).toEqual(["did:key:zabc123"]);
+    expect(result.response.summary.lineage_hops).toEqual([{ node_did: "did:key:zabc123", mesh_id: "mesh:art-001", timestamp: 1700000000 }]);
     expect(result.fetchedAt).toBeInstanceOf(Date);
   });
 
