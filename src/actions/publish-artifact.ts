@@ -11,6 +11,7 @@ import {
   extractStyleSignature,
 } from "@/lib/artifact-introspection";
 import { checkWithSovereignGate } from "@/lib/sifiso-gate";
+import { generateArtifactEmbedding } from "@/actions/generate-artifact-embedding";
 
 export async function publishArtifact({
   projectId,
@@ -125,6 +126,9 @@ export async function publishArtifact({
       styleSignature,
     },
   });
+
+  // 7b. Generate semantic embedding (fire-and-forget — non-critical)
+  generateArtifactEmbedding({ artifactId: artifact.id }).catch(() => {});
 
   // 8. Update manifest with the artifact id
   await prisma.publicArtifact.update({

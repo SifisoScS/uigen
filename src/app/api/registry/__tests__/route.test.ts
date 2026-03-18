@@ -11,9 +11,16 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/actions/find-similar-artifacts", () => ({
+  findSimilarArtifacts: vi.fn().mockResolvedValue([
+    { artifactId: "art-sim-1", name: "Similar Button", version: "1.0.0", similarity: 0.92 },
+  ]),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 const { prisma } = await import("@/lib/prisma");
+const { findSimilarArtifacts } = await import("@/actions/find-similar-artifacts");
 const { GET } = await import("../route");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,6 +128,20 @@ describe("GET /api/registry", () => {
         orderBy: { remixCount: "desc" },
       })
     );
+  });
+
+  it("returns similarity-ranked results when ?similar= param is provided", async () => {
+    const res = await GET(makeRequest({ similar: "art-source" }));
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    expect(findSimilarArtifacts).toHaveBeenCalledWith({ artifactId: "art-source", topK: 20 });
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0].artifactId).toBe("art-sim-1");
+    expect(json.items[0].similarity).toBe(0.92);
+    expect(json.hasMore).toBe(false);
+    // Should not call prisma when routing to similar-artifacts path
+    expect(prisma.publicArtifact.findMany).not.toHaveBeenCalled();
   });
 
   it("returns empty items list when no artifacts exist", async () => {

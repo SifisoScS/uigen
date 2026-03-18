@@ -11,6 +11,7 @@ import { MultiAgentCritiquePanel } from "./MultiAgentCritiquePanel";
 import { EvaluationPanel } from "./EvaluationPanel";
 import { getArtifactLineage } from "@/actions/get-artifact-lineage";
 import { getArtifactLineageDeep } from "@/actions/get-artifact-lineage";
+import { findSimilarArtifacts } from "@/actions/find-similar-artifacts";
 import type { EvaluationMetrics } from "@/lib/evaluation/metrics";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +53,7 @@ export default async function SharePage({
 
   if (!artifact) notFound();
 
-  const [manifest, lineage, deep, latestEval] = await Promise.all([
+  const [manifest, lineage, deep, latestEval, similarArtifacts] = await Promise.all([
     Promise.resolve(artifact.manifest as Record<string, unknown>),
     getArtifactLineage(artifactId).catch(() => ({ parent: null, children: [] as never[] })),
     getArtifactLineageDeep(artifactId, 1).catch(() => null),
@@ -63,6 +64,7 @@ export default async function SharePage({
         select: { status: true, metrics: true },
       })
       .catch(() => null),
+    findSimilarArtifacts({ artifactId, topK: 5 }).catch(() => []),
   ]);
   const crossParents = deep?.crossParents ?? [];
   const variants = deep?.variants ?? [];
@@ -185,6 +187,38 @@ export default async function SharePage({
 
         {/* Multi-agent critique & variant selection */}
         <MultiAgentCritiquePanel artifactId={artifactId} />
+
+        {/* Similar artifacts */}
+        {similarArtifacts.length > 0 && (
+          <section aria-label="Similar artifacts" data-testid="similar-artifacts-panel">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-3 flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5" />
+              Similar artifacts
+              <span className="ml-1 text-neutral-700 text-[10px] normal-case font-normal">
+                ({similarArtifacts.length})
+              </span>
+            </h2>
+            <div className="flex flex-col gap-1.5">
+              {similarArtifacts.map((s) => (
+                <Link
+                  key={s.artifactId}
+                  href={`/share/${s.artifactId}`}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-[#2a2a2a] bg-[#111111] hover:border-[#3a3a3a] hover:bg-[#161616] transition-colors group"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm text-neutral-200 group-hover:text-white transition-colors">
+                      {s.name}
+                    </span>
+                    <span className="text-xs text-neutral-600">v{s.version}</span>
+                  </div>
+                  <span className="text-xs text-neutral-500 tabular-nums">
+                    {(s.similarity * 100).toFixed(1)}% similar
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Ancestry chain */}
         <AncestryChain parent={lineage.parent} remixedInto={lineage.children} />

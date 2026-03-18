@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { findSimilarArtifacts } from "@/actions/find-similar-artifacts";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,17 @@ export async function GET(req: NextRequest) {
   const tagsParam = searchParams.get("tags")?.trim() ?? "";
   const sortBy = searchParams.get("sortBy") ?? "createdAt";
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10));
+  const similarTo = searchParams.get("similar")?.trim() ?? "";
 
   const tags = tagsParam
     ? tagsParam.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
+
+  // ?similar=<artifactId> — return similarity-ranked results instead of normal listing
+  if (similarTo) {
+    const similar = await findSimilarArtifacts({ artifactId: similarTo, topK: PAGE_SIZE });
+    return NextResponse.json({ items: similar, total: similar.length, offset: 0, hasMore: false });
+  }
 
   const orderBy =
     sortBy === "remixCount"

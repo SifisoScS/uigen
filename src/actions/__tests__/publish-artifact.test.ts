@@ -37,6 +37,10 @@ vi.mock("@/lib/governance/enforce", () => ({
   enforceBranchPolicy: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/actions/generate-artifact-embedding", () => ({
+  generateArtifactEmbedding: vi.fn().mockResolvedValue({ artifactId: "art-1", dimensions: 64 }),
+}));
+
 vi.mock("@/lib/sifiso-gate", () => ({
   checkWithSovereignGate: vi.fn().mockResolvedValue({
     passed: true,
@@ -54,6 +58,7 @@ const { getSession } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
 const { enforceBranchPolicy } = await import("@/lib/governance/enforce");
 const { checkWithSovereignGate } = await import("@/lib/sifiso-gate");
+const { generateArtifactEmbedding } = await import("@/actions/generate-artifact-embedding");
 const { publishArtifact } = await import("../publish-artifact");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -768,5 +773,31 @@ describe("publishArtifact — AST component tree", () => {
       styleSignature: { usedComponents: string[] };
     };
     expect(styleSignature.usedComponents).toEqual([]);
+  });
+});
+
+// ── Phase 22 — Embedding fire-and-forget ─────────────────────────────────────
+
+describe("publishArtifact — semantic embedding", () => {
+  it("calls generateArtifactEmbedding with the new artifact id after publish", async () => {
+    await publishArtifact({
+      projectId: "proj-1",
+      branchName: "release/v1.0",
+      name: "My Component",
+    });
+
+    expect(generateArtifactEmbedding).toHaveBeenCalledWith({ artifactId: "art-1" });
+  });
+
+  it("does not throw when generateArtifactEmbedding rejects (fire-and-forget)", async () => {
+    vi.mocked(generateArtifactEmbedding).mockRejectedValueOnce(new Error("Embedding service down"));
+
+    await expect(
+      publishArtifact({
+        projectId: "proj-1",
+        branchName: "release/v1.0",
+        name: "My Component",
+      })
+    ).resolves.toEqual({ artifactId: "art-1" });
   });
 });
