@@ -92,6 +92,8 @@ export interface ListExternalReposResult {
   id: string;
   name: string;
   url: string;
+  nodeId: string | null;
+  publicKey: string | null;
   lastSyncAt: Date | null;
   createdAt: Date;
 }
@@ -102,7 +104,7 @@ export async function listExternalRepos(): Promise<ListExternalReposResult[]> {
   if (!session) throw new Error("Unauthorized");
 
   return prisma.externalRepo.findMany({
-    select: { id: true, name: true, url: true, lastSyncAt: true, createdAt: true },
+    select: { id: true, name: true, url: true, nodeId: true, publicKey: true, lastSyncAt: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
 }
