@@ -13,7 +13,6 @@ import { ChatProvider } from "@/lib/contexts/chat-context";
 import { ChatInterface } from "@/components/chat/ChatInterface";
 import { FileTree } from "@/components/editor/FileTree";
 import { PreviewFrame } from "@/components/preview/PreviewFrame";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExportButton } from "@/components/ExportButton";
 import { ShareButton } from "@/components/ShareButton";
 import { PublishButton } from "@/components/PublishButton";
@@ -25,6 +24,7 @@ import { forkProject } from "@/actions/fork-project";
 import { GitFork, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type { Message } from "ai";
 
 const CodeEditor = dynamic(
@@ -124,31 +124,36 @@ function AppShell({ user, project }: MainContentProps) {
   // ── Read-only layout (non-owner visitor) ────────────────────────────────
   if (isReadOnly) {
     return (
-      <div className="h-screen w-screen overflow-hidden bg-[#0f0f0f] flex flex-col">
+      <div className="h-screen w-screen overflow-hidden bg-[#050816] flex flex-col relative">
+        <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+          <div className="absolute left-[-8%] top-[-8%] h-[26rem] w-[26rem] rounded-full bg-violet-500/16 blur-[120px] animate-drift" />
+          <div className="absolute right-[-5%] top-[8%] h-[24rem] w-[24rem] rounded-full bg-cyan-500/14 blur-[120px] animate-drift-delayed" />
+        </div>
         {project && <ForkBanner projectId={project.id} />}
-        <div className="flex-1 overflow-hidden flex flex-col bg-[#141414]">
+        <div className="flex-1 overflow-hidden flex flex-col relative z-10">
           {/* Top bar */}
-          <div className="h-12 border-b border-[#1f1f1f] px-4 flex items-center justify-between flex-shrink-0">
-            <Tabs
-              value={activeView}
-              onValueChange={(v) => setActiveView(v as "preview" | "code")}
-            >
-              <TabsList className="bg-[#1a1a1a] border border-[#2a2a2a] p-0.5 h-8 gap-0.5">
-                <TabsTrigger
-                  value="preview"
-                  className="data-[state=active]:bg-[#252525] data-[state=active]:text-neutral-100 data-[state=active]:shadow-none text-neutral-500 px-3 py-1 text-xs font-medium transition-all h-7"
-                >
-                  Preview
-                </TabsTrigger>
-                <TabsTrigger
-                  value="code"
-                  className="data-[state=active]:bg-[#252525] data-[state=active]:text-neutral-100 data-[state=active]:shadow-none text-neutral-500 px-3 py-1 text-xs font-medium transition-all h-7"
-                >
-                  Code
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-            <span className="text-[11px] text-neutral-600">{project?.name}</span>
+          <div className="h-12 border-b border-white/10 px-4 flex items-center justify-between flex-shrink-0 bg-white/[0.03] backdrop-blur-xl">
+            <div className="inline-flex rounded-2xl border border-white/10 bg-black/20 p-0.5">
+              <button
+                onClick={() => setActiveView("preview")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition",
+                  activeView === "preview" ? "bg-white/10 text-white" : "text-white/45 hover:text-white/70"
+                )}
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => setActiveView("code")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition",
+                  activeView === "code" ? "bg-white/10 text-white" : "text-white/45 hover:text-white/70"
+                )}
+              >
+                Code
+              </button>
+            </div>
+            <span className="text-[11px] text-white/35">{project?.name}</span>
           </div>
           {/* Content */}
           <div className="flex-1 overflow-hidden">
@@ -159,11 +164,11 @@ function AppShell({ user, project }: MainContentProps) {
             ) : (
               <ResizablePanelGroup direction="horizontal" className="h-full">
                 <ResizablePanel defaultSize={28} minSize={18} maxSize={45}>
-                  <div className="h-full bg-[#111111] border-r border-[#1f1f1f]">
+                  <div className="h-full bg-black/20 border-r border-white/10">
                     <FileTree />
                   </div>
                 </ResizablePanel>
-                <ResizableHandle className="w-px bg-[#1f1f1f] hover:bg-[#333] transition-colors" />
+                <ResizableHandle className="w-px bg-white/10 hover:bg-white/20 transition-colors" />
                 <ResizablePanel defaultSize={72}>
                   <div className="h-full">
                     <CodeEditor />
@@ -179,46 +184,57 @@ function AppShell({ user, project }: MainContentProps) {
 
   // ── Three-panel split layout (owner) ────────────────────────────────────
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#0f0f0f] flex">
+    <div className="h-screen w-screen overflow-hidden bg-[#050816] flex relative">
+      {/* Atmospheric orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+        <div className="absolute left-[-8%] top-[-8%] h-[26rem] w-[26rem] rounded-full bg-violet-500/16 blur-[120px] animate-drift" />
+        <div className="absolute right-[-5%] top-[8%] h-[24rem] w-[24rem] rounded-full bg-cyan-500/14 blur-[120px] animate-drift-delayed" />
+        <div className="absolute bottom-[-10%] left-[22%] h-[20rem] w-[20rem] rounded-full bg-fuchsia-500/12 blur-[100px] animate-float-slow" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:80px_80px] opacity-[0.12]" />
+      </div>
+
       {/* Left Sidebar */}
-      <Sidebar user={user} projectId={project?.id} />
+      <div className="relative z-10">
+        <Sidebar user={user} projectId={project?.id} />
+      </div>
 
       {/* Main Area */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative z-10">
         <ResizablePanelGroup direction="horizontal" className="h-full">
           {/* Chat Panel */}
           <ResizablePanel defaultSize={36} minSize={26} maxSize={52}>
-            <div className="h-full flex flex-col bg-[#111111]">
+            <div className="h-full flex flex-col bg-black/20 backdrop-blur-2xl border-r border-white/10">
               <ChatInterface />
             </div>
           </ResizablePanel>
 
-          <ResizableHandle className="w-px bg-[#1f1f1f] hover:bg-[#333] transition-colors data-[resize-handle-state=drag]:bg-blue-600" />
+          <ResizableHandle className="w-px bg-white/10 hover:bg-white/20 transition-colors data-[resize-handle-state=drag]:bg-violet-500" />
 
           {/* Preview / Code Panel */}
           <ResizablePanel defaultSize={64}>
-            <div className="h-full flex flex-col bg-[#141414]">
+            <div className="h-full flex flex-col bg-black/10">
               {/* Panel top bar */}
-              <div className="h-12 border-b border-[#1f1f1f] px-4 flex items-center justify-between flex-shrink-0">
-                <Tabs
-                  value={activeView}
-                  onValueChange={(v) => setActiveView(v as "preview" | "code")}
-                >
-                  <TabsList className="bg-[#1a1a1a] border border-[#2a2a2a] p-0.5 h-8 gap-0.5">
-                    <TabsTrigger
-                      value="preview"
-                      className="data-[state=active]:bg-[#252525] data-[state=active]:text-neutral-100 data-[state=active]:shadow-none text-neutral-500 px-3 py-1 text-xs font-medium transition-all h-7"
-                    >
-                      Preview
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="code"
-                      className="data-[state=active]:bg-[#252525] data-[state=active]:text-neutral-100 data-[state=active]:shadow-none text-neutral-500 px-3 py-1 text-xs font-medium transition-all h-7"
-                    >
-                      Code
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+              <div className="h-12 border-b border-white/10 px-4 flex items-center justify-between flex-shrink-0 bg-white/[0.03] backdrop-blur-xl">
+                <div className="inline-flex rounded-2xl border border-white/10 bg-black/20 p-0.5">
+                  <button
+                    onClick={() => setActiveView("preview")}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition",
+                      activeView === "preview" ? "bg-white/10 text-white" : "text-white/45 hover:text-white/70"
+                    )}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    onClick={() => setActiveView("code")}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition",
+                      activeView === "code" ? "bg-white/10 text-white" : "text-white/45 hover:text-white/70"
+                    )}
+                  >
+                    Code
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-2">
                   {project?.id && (
@@ -241,21 +257,14 @@ function AppShell({ user, project }: MainContentProps) {
                     <PreviewFrame />
                   </div>
                 ) : (
-                  <ResizablePanelGroup
-                    direction="horizontal"
-                    className="h-full"
-                  >
-                    <ResizablePanel
-                      defaultSize={28}
-                      minSize={18}
-                      maxSize={45}
-                    >
-                      <div className="h-full bg-[#111111] border-r border-[#1f1f1f]">
+                  <ResizablePanelGroup direction="horizontal" className="h-full">
+                    <ResizablePanel defaultSize={28} minSize={18} maxSize={45}>
+                      <div className="h-full bg-black/20 border-r border-white/10">
                         <FileTree />
                       </div>
                     </ResizablePanel>
 
-                    <ResizableHandle className="w-px bg-[#1f1f1f] hover:bg-[#333] transition-colors" />
+                    <ResizableHandle className="w-px bg-white/10 hover:bg-white/20 transition-colors" />
 
                     <ResizablePanel defaultSize={72}>
                       <div className="h-full">
