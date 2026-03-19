@@ -13,6 +13,15 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }));
+// Singleton mock identity — same object returned on every call so spy is trackable
+const _mockIdentity = {
+  did: "did:key:z_uigen_uigentest00000000000000000",
+  publicKeyHex: "ee".repeat(32),
+  sign: vi.fn(() => "ff".repeat(64)),  // 128-char hex stub
+};
+vi.mock("@/lib/uigen-identity", () => ({
+  getUIGenIdentity: vi.fn(() => _mockIdentity),
+}));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 
@@ -146,6 +155,29 @@ describe("registerExternalRepo — mesh handshake", () => {
 
     expect(prisma.externalRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ nodeId: null }) })
+    );
+  });
+
+  it("sends real UIGen node identity in handshake body (§22.4 — not stub-phase-44)", async () => {
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+
+    const [, options] = vi.mocked(fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(options.body as string);
+    expect(body.signature).not.toBe("stub-phase-44");
+    expect(body.signature).toHaveLength(128);
+    expect(body.node_did).toMatch(/^did:key:/);
+    expect(body.public_key).toHaveLength(64);
+    expect(typeof body.timestamp).toBe("number");
+  });
+
+  it("handshake body signature is Ed25519-signed canonical payload (§22.4)", async () => {
+    await registerExternalRepo({ name: "Remote UIGen", url: "https://remote.example.com" });
+
+    const { getUIGenIdentity } = await import("@/lib/uigen-identity");
+    const identity = getUIGenIdentity();
+    // verify that identity.sign was called (real signing — not a static stub)
+    expect(vi.mocked(identity.sign)).toHaveBeenCalledWith(
+      expect.stringMatching(/^did:key:z_uigen_uigentest00000000000000000:\d+$/)
     );
   });
 

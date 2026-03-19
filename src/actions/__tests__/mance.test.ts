@@ -140,14 +140,14 @@ describe("requestDistributedBuild", () => {
     expect(result.proposal.lineage_hops).toHaveLength(1);
   });
 
-  it("returns a signed vote from the remote node", async () => {
+  it("returns a signed vote from the remote node with quorum reason (§22.5)", async () => {
     const result = await requestDistributedBuild("repo-1", "mesh:art-001");
 
     expect(voteMance).toHaveBeenCalledWith(
       REPO.url,
       "prop-abc",
       "approve",
-      expect.stringContaining("stub"),
+      expect.stringContaining("Quorum"),
       expect.any(AbortSignal)
     );
     expect(result.vote.vote).toBe("approve");
@@ -195,5 +195,27 @@ describe("requestDistributedBuild", () => {
   it("returns requestedAt as a Date", async () => {
     const result = await requestDistributedBuild("repo-1", "mesh:art-001");
     expect(result.requestedAt).toBeInstanceOf(Date);
+  });
+
+  // ── §22.5 — Quorum integration tests ────────────────────────────────────────
+
+  it("includes quorum_passed and quorum_votes from vote response when present (§22.5)", async () => {
+    vi.mocked(voteMance).mockResolvedValue({
+      ...VOTE,
+      quorum_votes: 3,
+      quorum_passed: true,
+    } as never);
+
+    const result = await requestDistributedBuild("repo-1", "mesh:art-001");
+    expect(result.vote.quorum_votes).toBe(3);
+    expect(result.vote.quorum_passed).toBe(true);
+  });
+
+  it("vote reason uses §22.5 quorum language — not Phase 45 stub text", async () => {
+    await requestDistributedBuild("repo-1", "mesh:art-001");
+
+    const [, , , reason] = vi.mocked(voteMance).mock.calls[0];
+    expect(reason).toContain("§22.5");
+    expect(reason).not.toContain("stub");
   });
 });

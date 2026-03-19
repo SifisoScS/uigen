@@ -3,6 +3,7 @@
 import { getSession } from "@/lib/auth";
 import { type MeshHandshakeResponse } from "@/lib/mesh-client";
 import { prisma } from "@/lib/prisma";
+import { getUIGenIdentity } from "@/lib/uigen-identity";
 
 export interface RegisterExternalRepoInput {
   name: string;
@@ -43,15 +44,24 @@ export async function registerExternalRepo(
     };
   }
 
-  // Optional mesh handshake (§13 + §17) — non-fatal; repo creation always proceeds
+  // Optional mesh handshake (§13 + §17 + §22.4) — non-fatal; repo creation always proceeds
   let nodeId: string | null = null;
   let publicKey: string | null = null;
   try {
     const normalizedUrl = url.replace(/\/$/, "");
+    // §22.4 — send real UIGen node identity (replace stub-phase-44)
+    const identity = getUIGenIdentity();
+    const timestamp = Math.floor(Date.now() / 1000);
+    const canonical = `${identity.did}:${timestamp}`;
     const hsRes = await fetch(`${normalizedUrl}/mesh/handshake`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ signature: "stub-phase-44" }),
+      body: JSON.stringify({
+        signature: identity.sign(canonical),
+        node_did: identity.did,
+        public_key: identity.publicKeyHex,
+        timestamp,
+      }),
       signal: AbortSignal.timeout(5000),
     });
     if (hsRes.ok) {
