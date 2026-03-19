@@ -7,7 +7,7 @@
  *  1. Fetch artifact, lineage, trust from ExternalRepo (§14/§15/§16)
  *  2. §21 — Request orchestration → candidate_nodes (best-effort)
  *  3. §18 — POST /mesh/mance/propose → signed ManceProposal
- *  4. §18 — POST /mesh/mance/vote   → signed ManceVote (self-approval stub)
+ *  4. §18/§22.5 — POST /mesh/mance/vote → signed ManceVote + quorum result
  *  5. §19 — POST /mesh/critique/submit → signed CritiqueScore (best-effort)
  *  6. §19 — GET  /mesh/critique/aggregate → CritiqueAggregate (best-effort)
  *  7. §18 — POST /mesh/forge/assign  → signed ForgeTask (uses orchestration candidate)
@@ -109,12 +109,12 @@ export async function requestDistributedBuild(
     repo.url, artifactId, lineageHops, trust, AbortSignal.timeout(10_000)
   );
 
-  // ── 4. §18 — Self-vote (Phase 45 stub; quorum in Phase 49) ─────────────────
+  // ── 4. §18/§22.5 — Quorum vote (fan-out to registered peers if any) ──────────
   const vote = await voteMance(
     repo.url,
     proposal.proposal_id,
     "approve",
-    "Self-approval (Phase 45 stub — quorum in Phase 49)",
+    "Quorum vote (§22.5 — Phase 49)",
     AbortSignal.timeout(10_000)
   );
 

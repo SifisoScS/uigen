@@ -34,14 +34,16 @@ export interface ManceProposal {
   signature: string;   // Ed25519 hex (128 chars)
 }
 
-/** §18.3 — A signed vote on a ManceProposal. */
+/** §18.3/§22.5 — A signed vote on a ManceProposal with quorum result. */
 export interface ManceVote {
   proposal_id: string;
   voter_node_did: string;
   vote: "approve" | "reject";
   reason: string;
   timestamp: number;
-  signature: string;   // Ed25519 hex (128 chars)
+  signature: string;        // Ed25519 hex (128 chars)
+  quorum_votes?: number;    // §22.5 — total votes (self + peer responses)
+  quorum_passed?: boolean;  // §22.5 — whether ≥50% approved
 }
 
 /** §18.4 — A signed distributed Forge build task. */
@@ -115,6 +117,59 @@ export interface OrchestrationDecision {
   policy: OrchestrationPolicy;
   timestamp: number;
   signature: string;           // Ed25519 hex (128 chars)
+}
+
+// ── §22 — Peer Registry types & client functions ──────────────────────────────
+
+/** §22.1 — A registered Mesh peer node. */
+export interface PeerNode {
+  node_did: string;
+  url: string;
+  public_key: string;   // Ed25519 hex (64 chars)
+  registered_at: number;
+}
+
+/**
+ * Register a peer node with a remote Sifiso OS instance (§22.2).
+ *
+ * @param baseUrl   - Remote Sifiso OS URL
+ * @param peer      - Peer identity to register
+ * @param signal    - Optional AbortSignal
+ */
+export async function registerMeshPeer(
+  baseUrl: string,
+  peer: { node_did: string; url: string; public_key: string },
+  signal?: AbortSignal
+): Promise<PeerNode> {
+  const url = `${baseUrl.replace(/\/+$/, "")}/mesh/peers/register`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(peer),
+    signal,
+  });
+  if (!res.ok) throw new Error(`Peer registration failed: ${res.status} from ${url}`);
+  return (await res.json()) as PeerNode;
+}
+
+/**
+ * List all registered peer nodes from a remote Sifiso OS instance (§22.2).
+ *
+ * @param baseUrl   - Remote Sifiso OS URL
+ * @param signal    - Optional AbortSignal
+ */
+export async function listMeshPeers(
+  baseUrl: string,
+  signal?: AbortSignal
+): Promise<PeerNode[]> {
+  const url = `${baseUrl.replace(/\/+$/, "")}/mesh/peers`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    signal,
+  });
+  if (!res.ok) throw new Error(`List peers failed: ${res.status} from ${url}`);
+  return (await res.json()) as PeerNode[];
 }
 
 /** §17 — Handshake response type (used by register-external-repo). */
