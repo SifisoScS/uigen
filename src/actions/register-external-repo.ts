@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { type MeshHandshakeResponse } from "@/lib/mesh-client";
 import { prisma } from "@/lib/prisma";
@@ -64,6 +65,7 @@ export async function registerExternalRepo(
         }
       }
     } catch { /* network failure — keep existing key */ }
+    revalidatePath("/external-repos");
     return {
       id: existing.id,
       name: existing.name,
@@ -108,6 +110,7 @@ export async function registerExternalRepo(
     data: { name, url, apiKey: apiKey ?? null, nodeId, publicKey },
   });
 
+  revalidatePath("/external-repos");
   return {
     id: repo.id,
     name: repo.name,
