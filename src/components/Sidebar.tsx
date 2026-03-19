@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus, LogOut, LogIn, Sparkles,
-  PanelLeftClose, PanelLeftOpen, History, Layers, Network, Shield, Package, Server,
+  Plus, LogOut, LogIn, History, Layers, Network, Shield,
+  Package, Server, ChevronRight,
 } from "lucide-react";
 import { GovernanceLog } from "@/components/GovernanceLog";
 import { AuthDialog } from "@/components/auth/AuthDialog";
@@ -30,10 +30,20 @@ interface Project {
 
 type SidebarView = "projects" | "history" | "governance";
 
+// Spark icon — matches Nova brand mark
+function SparkIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 3 9.8 9.8 3 12l6.8 2.2L12 21l2.2-6.8L21 12l-6.8-2.2L12 3Z" />
+      <path d="m18 4 .6 1.4L20 6l-1.4.6L18 8l-.6-1.4L16 6l1.4-.6L18 4Z" />
+    </svg>
+  );
+}
+
 export function Sidebar({ user, projectId }: SidebarProps) {
   const router = useRouter();
   const { generationCount } = useChat();
-  const [collapsed, setCollapsed] = useState(false);
   const [view, setView] = useState<SidebarView>("projects");
   const [projects, setProjects] = useState<Project[]>([]);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -59,229 +69,178 @@ export function Sidebar({ user, projectId }: SidebarProps) {
     await signOut();
   };
 
-  // History tab only available when viewing an owned project
   const canShowHistory = !!projectId && !!user;
 
-  if (collapsed) {
-    return (
-      <div className="w-12 flex-shrink-0 h-full flex flex-col items-center py-3 gap-3 bg-[#111111] border-r border-[#1f1f1f]">
-        <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
-          <Sparkles className="h-3.5 w-3.5 text-white" />
-        </div>
-        <button
-          onClick={() => setCollapsed(false)}
-          className="p-1.5 rounded-md text-neutral-600 hover:text-neutral-300 hover:bg-[#1e1e1e] transition-colors"
-          title="Expand sidebar"
-        >
-          <PanelLeftOpen className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleNewDesign}
-          className="p-1.5 rounded-md text-neutral-600 hover:text-neutral-300 hover:bg-[#1e1e1e] transition-colors"
-          title="New Design"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-[220px] flex-shrink-0 h-full flex flex-col bg-[#111111] border-r border-[#1f1f1f]">
-      {/* Header */}
-      <div className="h-14 flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-            <Sparkles className="h-3.5 w-3.5 text-white" />
+    <div className="w-[260px] flex-shrink-0 h-full flex flex-col bg-black/30 backdrop-blur-2xl border-r border-white/10">
+
+      {/* ── Brand header ──────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between rounded-[22px] border border-white/10 bg-white/[0.04] mx-3 mt-3 px-3 py-3">
+        <div className="flex items-center gap-3">
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 text-white shadow-[0_0_28px_rgba(99,102,241,0.35)]">
+            <SparkIcon className="h-4 w-4" />
           </div>
-          <span className="text-neutral-100 font-semibold text-sm tracking-tight">UIGen</span>
+          <div>
+            <p className="text-sm font-semibold text-white">UIGen</p>
+            <p className="text-[10px] text-white/40 leading-none mt-0.5">Nova workspace</p>
+          </div>
         </div>
-        <button
-          onClick={() => setCollapsed(true)}
-          className="p-1 rounded-md text-neutral-600 hover:text-neutral-400 hover:bg-[#1e1e1e] transition-colors"
-          title="Collapse sidebar"
-        >
-          <PanelLeftClose className="h-4 w-4" />
-        </button>
       </div>
 
-      {/* New Design */}
-      <div className="px-3 mb-3 flex-shrink-0">
+      {/* ── New Design ────────────────────────────────────────────────────── */}
+      <div className="px-3 mt-3">
         <button
           onClick={handleNewDesign}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#1a1a1a] hover:bg-[#222222] text-neutral-300 hover:text-neutral-100 text-sm font-medium transition-colors border border-[#2a2a2a] hover:border-[#333]"
+          className="w-full flex items-center justify-center gap-2 rounded-[18px] border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white"
         >
-          <Plus className="h-4 w-4" />
-          New Design
+          <span className="text-lg leading-none">+</span>
+          New design
         </button>
       </div>
 
-      {/* Projects / History toggle tabs */}
+      {/* ── View toggle ───────────────────────────────────────────────────── */}
       {canShowHistory && (
-        <div className="px-3 mb-2 flex-shrink-0">
-          <div className="flex bg-[#1a1a1a] rounded-md p-0.5 border border-[#252525]">
-            <button
-              onClick={() => setView("projects")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-1 rounded text-[11px] font-medium transition-colors",
-                view === "projects"
-                  ? "bg-[#2a2a2a] text-neutral-200"
-                  : "text-neutral-600 hover:text-neutral-400"
-              )}
-            >
-              <Layers className="h-3 w-3" />
-              Projects
-            </button>
-            <button
-              onClick={() => setView("history")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-1 rounded text-[11px] font-medium transition-colors",
-                view === "history"
-                  ? "bg-[#2a2a2a] text-neutral-200"
-                  : "text-neutral-600 hover:text-neutral-400"
-              )}
-            >
-              <History className="h-3 w-3" />
-              History
-            </button>
-            <button
-              onClick={() => setView("governance")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-1 rounded text-[11px] font-medium transition-colors",
-                view === "governance"
-                  ? "bg-[#2a2a2a] text-neutral-200"
-                  : "text-neutral-600 hover:text-neutral-400"
-              )}
-              title="Governance log"
-            >
-              <Shield className="h-3 w-3" />
-            </button>
+        <div className="px-3 mt-3">
+          <div className="rounded-[18px] border border-white/10 bg-white/[0.04] p-1">
+            <div className="grid grid-cols-3 gap-1 text-[11px]">
+              {([
+                { id: "projects", label: "Projects", icon: <Layers className="h-3 w-3" /> },
+                { id: "history",  label: "History",  icon: <History className="h-3 w-3" /> },
+                { id: "governance", label: "Gov",    icon: <Shield className="h-3 w-3" /> },
+              ] as { id: SidebarView; label: string; icon: React.ReactNode }[]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setView(tab.id)}
+                  className={cn(
+                    "flex items-center justify-center gap-1 rounded-2xl px-2 py-1.5 transition font-medium",
+                    view === tab.id ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"
+                  )}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Content area */}
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+      {/* ── Content ───────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden flex flex-col min-h-0 mt-4 px-3">
         {view === "governance" && canShowHistory && projectId ? (
           <>
-            <div className="px-3 mb-1 flex-shrink-0">
-              <p className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">
-                Governance Log
-              </p>
-            </div>
+            <p className="text-[10px] text-white/35 uppercase tracking-[0.28em] font-medium mb-2 px-1">
+              Governance Log
+            </p>
             <GovernanceLog projectId={projectId} />
           </>
         ) : view === "history" && canShowHistory ? (
           <>
-            <div className="px-3 mb-1 flex-shrink-0 flex items-center justify-between">
-              <p className="text-[10px] text-neutral-600 uppercase tracking-wider font-medium">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <p className="text-[10px] text-white/35 uppercase tracking-[0.28em] font-medium">
                 Checkpoints
               </p>
               <button
                 onClick={() => setGraphOpen(true)}
-                className="p-1 rounded text-neutral-700 hover:text-neutral-400 hover:bg-[#1e1e1e] transition-colors"
+                className="p-1 rounded text-white/30 hover:text-white/60 hover:bg-white/5 transition"
                 title="Version Graph"
               >
                 <Network className="h-3.5 w-3.5" />
               </button>
             </div>
-            <SnapshotTimeline
-              projectId={projectId}
-              generationCount={generationCount}
-            />
+            <SnapshotTimeline projectId={projectId} generationCount={generationCount} />
           </>
         ) : (
-          <div className="flex-1 overflow-y-auto px-3 min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {user && projects.length > 0 && (
               <>
-                <div className="text-[11px] font-medium text-neutral-600 uppercase tracking-wider mb-2 px-1">
+                <p className="text-[10px] text-white/35 uppercase tracking-[0.28em] font-medium mb-3 px-1">
                   All designs
-                </div>
-                <div className="space-y-0.5">
+                </p>
+                <div className="space-y-1">
                   {projects.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => router.push(`/${p.id}`)}
                       className={cn(
-                        "w-full text-left px-2.5 py-2 rounded-md text-xs truncate transition-colors",
+                        "w-full rounded-[18px] border px-3 py-2.5 text-left transition",
                         p.id === projectId
-                          ? "bg-[#1e1e1e] text-neutral-200 border border-[#2e2e2e]"
-                          : "text-neutral-500 hover:text-neutral-300 hover:bg-[#181818]"
+                          ? "border-white/15 bg-white/10"
+                          : "border-white/0 bg-transparent hover:border-white/10 hover:bg-white/5"
                       )}
                     >
-                      {p.name}
+                      <p className="text-sm font-medium text-white/85 truncate">{p.name}</p>
+                      <p className="mt-0.5 text-[10px] leading-5 text-white/35 truncate">
+                        {new Date(p.updatedAt).toLocaleDateString()}
+                      </p>
                     </button>
                   ))}
                 </div>
               </>
             )}
-
             {!user && (
-              <div className="px-1">
-                <p className="text-[11px] text-neutral-700 leading-relaxed">
-                  Sign in to save and revisit your designs.
-                </p>
-              </div>
+              <p className="text-[11px] text-white/35 leading-relaxed px-1">
+                Sign in to save and revisit your designs.
+              </p>
             )}
           </div>
         )}
       </div>
 
-      {/* Registry link */}
-      <div className="flex-shrink-0 px-3 pb-1">
-        <button
-          onClick={() => router.push("/registry")}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-neutral-600 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
-        >
-          <Package className="h-3.5 w-3.5" />
-          Registry
-        </button>
+      {/* ── Bottom nav ────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 px-3 pt-3 space-y-1 border-t border-white/10 mt-3">
+        {[
+          { label: "Registry",   icon: <Package className="h-3.5 w-3.5" />,  href: "/registry" },
+          { label: "Mesh Nodes", icon: <Server className="h-3.5 w-3.5" />,   href: "/external-repos" },
+        ].map((item) => (
+          <button
+            key={item.label}
+            onClick={() => router.push(item.href)}
+            className="flex w-full items-center gap-2.5 rounded-2xl border border-transparent px-3 py-2.5 text-sm text-white/50 transition hover:border-white/10 hover:bg-white/5 hover:text-white/80"
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
       </div>
 
-      {/* Mesh Nodes link */}
-      <div className="flex-shrink-0 px-3 pb-2">
-        <button
-          onClick={() => router.push("/external-repos")}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-neutral-600 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
-        >
-          <Server className="h-3.5 w-3.5" />
-          Mesh Nodes
-        </button>
-      </div>
-
-      {/* Auth footer */}
-      <div className="flex-shrink-0 px-3 py-3 border-t border-[#1f1f1f]">
+      {/* ── Auth footer ───────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 mx-3 mb-3 mt-2">
         {user ? (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-blue-600/20 border border-blue-600/30 flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] text-blue-400 font-semibold">
-                {user.email[0].toUpperCase()}
-              </span>
+          <div className="rounded-[22px] border border-white/10 bg-white/[0.05] p-3">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-rose-400 text-white flex-shrink-0">
+                <span className="text-sm font-semibold">{user.email[0].toUpperCase()}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-white/85">{user.email}</p>
+                <p className="text-[10px] text-white/40">Sovereign account · online</p>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="p-1.5 rounded-xl text-white/35 hover:text-white/70 hover:bg-white/5 transition flex-shrink-0"
+                title="Sign out"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <span className="flex-1 text-xs text-neutral-500 truncate">{user.email}</span>
-            <button
-              onClick={handleSignOut}
-              className="p-1 rounded-md text-neutral-600 hover:text-neutral-300 hover:bg-[#1e1e1e] transition-colors"
-              title="Sign out"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="rounded-[22px] border border-white/10 bg-white/[0.05] p-3 space-y-2">
             <button
               onClick={() => { setAuthMode("signin"); setAuthDialogOpen(true); }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-neutral-500 hover:text-neutral-300 hover:bg-[#1a1a1a] transition-colors"
+              className="w-full flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 transition hover:text-white/85 hover:bg-white/8"
             >
               <LogIn className="h-3.5 w-3.5" />
               Sign in
             </button>
             <button
               onClick={() => { setAuthMode("signup"); setAuthDialogOpen(true); }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              className="w-full flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 to-cyan-400 px-3 py-2 text-sm font-medium text-white transition hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
               Create account
+              <ChevronRight className="h-3.5 w-3.5 ml-auto" />
             </button>
           </div>
         )}

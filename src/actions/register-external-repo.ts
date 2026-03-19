@@ -130,6 +130,14 @@ export interface ListExternalReposResult {
   createdAt: Date;
 }
 
+/** Delete a registered external repo by id. */
+export async function deleteExternalRepo(id: string): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
+  await prisma.externalRepo.delete({ where: { id } });
+  revalidatePath("/external-repos");
+}
+
 /** Return all registered external repos (no sensitive apiKey). */
 export async function listExternalRepos(): Promise<ListExternalReposResult[]> {
   const session = await getSession();
