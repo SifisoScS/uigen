@@ -250,11 +250,14 @@ describe("requestDistributedBuild — critique integration", () => {
     expect(result.task.task_id).toBe("task-xyz");
   });
 
-  it("re-throws CritiqueScore signature verification failure", async () => {
+  it("nulls critique (does not throw) when CritiqueScore signature verification fails — stale key after node restart", async () => {
     vi.mocked(verifyEd25519).mockReturnValue(false);
 
-    await expect(
-      requestDistributedBuild("repo-1", "mesh:art-001")
-    ).rejects.toThrow(/CritiqueScore signature verification failed/);
+    const result = await requestDistributedBuild("repo-1", "mesh:art-001");
+    // Build succeeds; critique is nulled as unverifiable (warning only — §19.4 advisory)
+    expect(result.critique).toBeNull();
+    expect(result.critiqueAggregate).toBeNull();
+    expect(result.proposal.proposal_id).toBe("prop-abc");
+    expect(result.task.task_id).toBe("task-xyz");
   });
 });
