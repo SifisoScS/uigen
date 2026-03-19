@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Globe, Plus, Zap, CheckCircle, XCircle, Loader2, Server, Key } from "lucide-react";
+import { Globe, Plus, Zap, CheckCircle, XCircle, Loader2, Server, Key, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,7 @@ interface BuildResult {
 
 export function ExternalReposClient({ initialRepos }: { initialRepos: Repo[] }) {
   const router = useRouter();
-  const [repos, setRepos] = useState<Repo[]>(initialRepos);
+  const repos = initialRepos;  // always use server-fresh data; router.refresh() re-renders parent
 
   // ── Register form state ──────────────────────────────────────────────────────
   const [name, setName] = useState("");
@@ -44,9 +44,14 @@ export function ExternalReposClient({ initialRepos }: { initialRepos: Repo[] }) 
   const [registerResult, setRegisterResult] = useState<RegisterResult | null>(null);
   const [isRegistering, startRegister] = useTransition();
 
+  // ── Re-register state ────────────────────────────────────────────────────────
+  const [reregisterStatus, setReregisterStatus] = useState<Record<string, "ok" | "err" | null>>({});
+  const [isReregistering, startReregister] = useTransition();
+
   // ── Build state ──────────────────────────────────────────────────────────────
   const [buildRepoId, setBuildRepoId] = useState<string | null>(null);
   const [artifactId, setArtifactId] = useState("");
+  const [lastArtifactId, setLastArtifactId] = useState<Record<string, string>>({});
   const [buildResult, setBuildResult] = useState<Record<string, BuildResult | null>>({});
   const [buildError, setBuildError] = useState<Record<string, string | null>>({});
   const [isBuilding, startBuild] = useTransition();
@@ -72,12 +77,27 @@ export function ExternalReposClient({ initialRepos }: { initialRepos: Repo[] }) 
     });
   };
 
-  const handleBuild = (repoId: string) => {
+  const handleReregister = (repo: Repo) => {
+    setReregisterStatus((s) => ({ ...s, [repo.id]: null }));
+    startReregister(async () => {
+      try {
+        await registerExternalRepo({ name: repo.name, url: repo.url });
+        setReregisterStatus((s) => ({ ...s, [repo.id]: "ok" }));
+        router.refresh();
+      } catch {
+        setReregisterStatus((s) => ({ ...s, [repo.id]: "err" }));
+      }
+    });
+  };
+
+  const handleBuild = (repoId: string, overrideArtifactId?: string) => {
+    const aid = overrideArtifactId ?? (artifactId.trim() || `mesh:art-${Date.now()}`);
     setBuildError((e) => ({ ...e, [repoId]: null }));
     setBuildResult((r) => ({ ...r, [repoId]: null }));
+    setLastArtifactId((m) => ({ ...m, [repoId]: aid }));
     startBuild(async () => {
       try {
-        const result = await requestDistributedBuild(repoId, artifactId.trim() || `mesh:art-${Date.now()}`);
+        const result = await requestDistributedBuild(repoId, aid);
         setBuildResult((r) => ({ ...r, [repoId]: result as BuildResult }));
       } catch (err) {
         setBuildError((e) => ({ ...e, [repoId]: err instanceof Error ? err.message : String(err) }));
@@ -206,16 +226,31 @@ export function ExternalReposClient({ initialRepos }: { initialRepos: Repo[] }) 
                       {repo.url}
                     </a>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-shrink-0 gap-1.5 text-xs h-7"
-                    onClick={() => setBuildRepoId(buildRepoId === repo.id ? null : repo.id)}
-                    disabled={isBuilding}
-                  >
-                    <Zap className="h-3 w-3" />
-                    Distributed Build
-                  </Button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1 text-xs h-7 text-neutral-500"
+                      onClick={() => handleReregister(repo)}
+                      disabled={isReregistering}
+                      title="Re-handshake to refresh node DID and public key (use after node restart)"
+                    >
+                      {isReregistering
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <RefreshCw className={cn("h-3 w-3", reregisterStatus[repo.id] === "ok" && "text-emerald-500")} />
+                      }
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs h-7"
+                      onClick={() => setBuildRepoId(buildRepoId === repo.id ? null : repo.id)}
+                      disabled={isBuilding}
+                    >
+                      <Zap className="h-3 w-3" />
+                      Distributed Build
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Node identity */}
@@ -264,11 +299,39 @@ export function ExternalReposClient({ initialRepos }: { initialRepos: Repo[] }) 
 
                 {/* Build result */}
                 {buildResult[repo.id] && (
-                  <BuildResultPanel result={buildResult[repo.id]!} />
+                  <>
+                    <BuildResultPanel result={buildResult[repo.id]!} />
+                    <div className="mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs h-7"
+                        onClick={() => handleBuild(repo.id, lastArtifactId[repo.id])}
+                        disabled={isBuilding}
+                      >
+                        {isBuilding ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Re-run ({lastArtifactId[repo.id]})
+                      </Button>
+                    </div>
+                  </>
                 )}
                 {buildError[repo.id] && (
-                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
-                    {buildError[repo.id]}
+                  <div className="mt-3 space-y-2">
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                      {buildError[repo.id]}
+                    </div>
+                    {lastArtifactId[repo.id] && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs h-7"
+                        onClick={() => handleBuild(repo.id, lastArtifactId[repo.id])}
+                        disabled={isBuilding}
+                      >
+                        {isBuilding ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Re-run
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
