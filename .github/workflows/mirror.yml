@@ -1,0 +1,20 @@
+name: Mirror to second-intelligence
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["**"]
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (bare)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push mirror
+        run: |
+          git remote add si https://x-access-token:${{ secrets.SI_MIRROR_TOKEN }}@github.com/second-intelligence/uigen.git
+          git push si --mirror
